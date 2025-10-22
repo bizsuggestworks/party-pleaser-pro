@@ -1,0 +1,4 @@
+project_id = "deymtgmazorjfpinfisx"
+
+[functions.generate-gift-recommendations]
+verify_jwt = false
