@@ -46,6 +46,28 @@ Example format: ["LEGO & Building", "K-pop & Music", "Sports & Outdoor"]`;
       });
 
       if (!themeResponse.ok) {
+        if (themeResponse.status === 402) {
+          return new Response(
+            JSON.stringify({ 
+              error: "Your Lovable AI credits have run out. Please add credits in Settings → Workspace → Usage to continue using AI features." 
+            }),
+            { 
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
+        if (themeResponse.status === 429) {
+          return new Response(
+            JSON.stringify({ 
+              error: "Too many requests. Please wait a moment and try again." 
+            }),
+            { 
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
         throw new Error(`Theme generation failed: ${themeResponse.status}`);
       }
 

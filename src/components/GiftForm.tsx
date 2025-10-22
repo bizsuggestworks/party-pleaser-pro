@@ -60,10 +60,27 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
           },
         });
         if (error) throw error;
+        
+        if (data?.error) {
+          toast({ 
+            title: "AI Credits Required", 
+            description: data.error,
+            variant: "destructive" 
+          });
+          return;
+        }
+        
         setThemeOptions(data.themes || []);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error generating themes:", error);
-        toast({ title: "Error generating themes", variant: "destructive" });
+        const message = error?.message || "Failed to generate themes";
+        toast({ 
+          title: "Error", 
+          description: message.includes("credits") || message.includes("402") 
+            ? "Your Lovable AI credits have run out. Please add credits in Settings → Workspace → Usage to continue."
+            : message,
+          variant: "destructive" 
+        });
       } finally {
         setLoadingThemes(false);
       }
@@ -107,13 +124,25 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
       });
 
       if (error) throw error;
+      
+      if (data?.error) {
+        toast({ 
+          title: "AI Credits Required", 
+          description: data.error,
+          variant: "destructive" 
+        });
+        return;
+      }
 
       onComplete(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating recommendations:", error);
+      const message = error?.message || "Failed to generate recommendations";
       toast({
         title: "Error",
-        description: "Failed to generate recommendations. Please try again.",
+        description: message.includes("credits") || message.includes("402")
+          ? "Your Lovable AI credits have run out. Please add credits in Settings → Workspace → Usage to continue."
+          : message,
         variant: "destructive",
       });
     } finally {
