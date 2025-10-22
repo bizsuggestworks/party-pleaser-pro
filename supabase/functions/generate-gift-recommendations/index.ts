@@ -64,147 +64,71 @@ Example format: ["LEGO & Building", "K-pop & Music", "Sports & Outdoor"]`;
     const { eventType, budget, requirement, theme, bagSize, quantity } = body;
     console.log("Generating gift recommendations for:", { eventType, budget, requirement, theme, bagSize, quantity });
 
-    // Generate gift recommendations with images
-    const giftSystemPrompt = `You are an expert gift recommendation assistant. Based on the user's preferences, suggest 6 perfect return gifts.
+    // Parse budget
+    const budgetMatch = budget.match(/[\d.]+/);
+    const maxBudgetPerBag = budgetMatch ? parseFloat(budgetMatch[0]) : 10;
 
-For each gift, provide:
-1. title: A clear, specific product name
-2. description: Why this gift is perfect (2-3 sentences)
-3. price: Estimated price range
-4. category: The theme/category (e.g., "LEGO", "K-pop", "Minecraft")
-5. buyLink: A real Amazon search URL for the product
-6. imagePrompt: A detailed description for generating an image of this item (be specific about colors, style, setting)
-
-Make recommendations specific to the theme. Return ONLY valid JSON in this exact format:
-{
-  "recommendations": [
-    {
-      "title": "Product Name",
-      "description": "Why this is perfect...",
-      "price": "$10-15",
-      "category": "LEGO",
-      "buyLink": "https://www.amazon.com/s?k=product+name",
-      "imagePrompt": "A colorful LEGO set with..."
-    }
-  ]
-}`;
-
-    const giftUserPrompt = `Event: ${eventType}
-Budget: ${budget}
-Type: ${requirement}
-Theme/Interests: ${theme}
-
-Generate 6 gift recommendations with detailed image prompts.`;
-
-    console.log("Requesting gift recommendations from AI...");
-    const giftResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: giftSystemPrompt },
-          { role: 'user', content: giftUserPrompt }
-        ],
-        temperature: 0.8,
-      }),
-    });
-
-    if (!giftResponse.ok) {
-      const errorText = await giftResponse.text();
-      console.error('AI Gateway error for gifts:', giftResponse.status, errorText);
-      throw new Error(`AI Gateway error: ${giftResponse.status}`);
-    }
-
-    const giftData = await giftResponse.json();
-    console.log("Gift recommendations received");
+    // Determine items per bag based on bag size
+    const itemsPerBag = bagSize.includes("Small") ? 6 : bagSize.includes("Medium") ? 8 : 10;
     
-    const giftContent = giftData.choices[0].message.content;
-    let recommendations;
-    
-    try {
-      const jsonMatch = giftContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        recommendations = parsed.recommendations;
-      } else {
-        throw new Error("No JSON found in gift response");
-      }
-    } catch (parseError) {
-      console.error("Error parsing gift response:", parseError);
-      recommendations = [];
-    }
+    // Calculate target price per item (reserve 20% for the bag itself)
+    const budgetForItems = maxBudgetPerBag * 0.8;
+    const targetPricePerItem = budgetForItems / itemsPerBag;
 
-    // Generate images for each gift
-    console.log("Generating images for gifts...");
-    const recommendationsWithImages = await Promise.all(
-      recommendations.map(async (gift: any) => {
-        try {
-          const imageResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-2.5-flash-image-preview',
-              messages: [
-                {
-                  role: 'user',
-                  content: gift.imagePrompt || `A high-quality product photo of ${gift.title}, professional lighting, white background`
-                }
-              ],
-              modalities: ["image", "text"]
-            }),
-          });
+    // Generate bag contents with items
+    const bagSystemPrompt = `You are an expert gift curator. Create 3 complete gift bag packages for a ${eventType}.
 
-          if (imageResponse.ok) {
-            const imageData = await imageResponse.json();
-            const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-            return { ...gift, imageUrl, imagePrompt: undefined };
-          }
-        } catch (error) {
-          console.error("Error generating image for gift:", error);
-        }
-        return { ...gift, imagePrompt: undefined };
-      })
-    );
+For EACH bag, provide:
+1. bagTitle: Name of the gift bag style
+2. bagDescription: Description of the bag (size, design, material)
+3. bagPrice: Price of just the bag (numeric, 15-20% of total budget)
+4. bagBuyLink: Amazon search URL for the bag
+5. bagImagePrompt: Description for generating bag image
+6. items: Array of ${itemsPerBag} gift items that go IN this bag
 
-    // Generate bag recommendations
-    const bagSystemPrompt = `You are a gift bag expert. Based on the event details and bag preferences, suggest 3 perfect gift bags that can fit the recommended items.
+For EACH item in the bag:
+- title: Specific product name
+- description: Brief description (1 sentence)
+- price: Numeric price that fits budget (aim for $${targetPricePerItem.toFixed(2)} per item)
+- category: Item category matching theme
+- buyLink: Amazon search URL
+- imagePrompt: Description for generating item image
 
-For each bag, provide:
-1. title: Specific bag product name
-2. description: Why this bag is perfect (size, design, material, fits all items)
-3. price: Estimated price range
-4. buyLink: A real Amazon search URL for the bag
-5. imagePrompt: A detailed description for generating an image of this bag
+CRITICAL: Total items price + bag price must NOT exceed $${maxBudgetPerBag}
 
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON:
 {
   "bags": [
     {
-      "title": "Bag Name",
-      "description": "Perfect because...",
-      "price": "$5-10",
-      "buyLink": "https://www.amazon.com/s?k=bag+name",
-      "imagePrompt": "A colorful gift bag with..."
+      "bagTitle": "Colorful Party Bags",
+      "bagDescription": "Medium-sized vibrant bags",
+      "bagPrice": 2.5,
+      "bagBuyLink": "https://www.amazon.com/s?k=party+bags",
+      "bagImagePrompt": "Colorful paper gift bags...",
+      "items": [
+        {
+          "title": "Mini LEGO Set",
+          "description": "Small building set",
+          "price": 1.2,
+          "category": "LEGO",
+          "buyLink": "https://www.amazon.com/s?k=mini+lego",
+          "imagePrompt": "Small LEGO set in box..."
+        }
+      ]
     }
   ]
 }`;
 
     const bagUserPrompt = `Event: ${eventType}
-Budget: ${budget}
-Bag Size: ${bagSize}
+Max Budget Per Bag: $${maxBudgetPerBag}
+Items Per Bag: ${itemsPerBag}
 Theme: ${theme}
-Quantity Needed: ${quantity}
+Bag Size: ${bagSize}
+Number of Bags Needed: ${quantity}
 
-Generate 3 gift bag recommendations that match the theme and size requirements.`;
+Create 3 different bag options, each with ${itemsPerBag} items that fit within $${maxBudgetPerBag} total budget.`;
 
-    console.log("Requesting bag recommendations from AI...");
+    console.log("Requesting bag and item recommendations from AI...");
     const bagResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -223,12 +147,12 @@ Generate 3 gift bag recommendations that match the theme and size requirements.`
 
     if (!bagResponse.ok) {
       const errorText = await bagResponse.text();
-      console.error('AI Gateway error for bags:', bagResponse.status, errorText);
+      console.error('AI Gateway error:', bagResponse.status, errorText);
       throw new Error(`AI Gateway error: ${bagResponse.status}`);
     }
 
     const bagData = await bagResponse.json();
-    console.log("Bag recommendations received");
+    console.log("Bag and item recommendations received");
     
     const bagContent = bagData.choices[0].message.content;
     let bags;
@@ -239,19 +163,21 @@ Generate 3 gift bag recommendations that match the theme and size requirements.`
         const parsed = JSON.parse(jsonMatch[0]);
         bags = parsed.bags;
       } else {
-        throw new Error("No JSON found in bag response");
+        throw new Error("No JSON found in response");
       }
     } catch (parseError) {
-      console.error("Error parsing bag response:", parseError);
+      console.error("Error parsing response:", parseError);
       bags = [];
     }
 
-    // Generate images for each bag
-    console.log("Generating images for bags...");
+    // Generate images for bags and items
+    console.log("Generating images for bags and items...");
     const bagsWithImages = await Promise.all(
       bags.map(async (bag: any) => {
+        // Generate bag image
+        let bagImageUrl;
         try {
-          const imageResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          const bagImageResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -262,39 +188,83 @@ Generate 3 gift bag recommendations that match the theme and size requirements.`
               messages: [
                 {
                   role: 'user',
-                  content: bag.imagePrompt || `A high-quality product photo of ${bag.title}, professional lighting, clean background`
+                  content: bag.bagImagePrompt || `A high-quality product photo of ${bag.bagTitle}, professional lighting`
                 }
               ],
               modalities: ["image", "text"]
             }),
           });
 
-          if (imageResponse.ok) {
-            const imageData = await imageResponse.json();
-            const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-            return { ...bag, imageUrl, imagePrompt: undefined };
+          if (bagImageResponse.ok) {
+            const imageData = await bagImageResponse.json();
+            bagImageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
           }
         } catch (error) {
-          console.error("Error generating image for bag:", error);
+          console.error("Error generating bag image:", error);
         }
-        return { ...bag, imagePrompt: undefined };
+
+        // Generate images for items
+        const itemsWithImages = await Promise.all(
+          (bag.items || []).map(async (item: any) => {
+            try {
+              const itemImageResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: 'google/gemini-2.5-flash-image-preview',
+                  messages: [
+                    {
+                      role: 'user',
+                      content: item.imagePrompt || `Product photo of ${item.title}, white background`
+                    }
+                  ],
+                  modalities: ["image", "text"]
+                }),
+              });
+
+              if (itemImageResponse.ok) {
+                const imageData = await itemImageResponse.json();
+                const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+                return { ...item, imageUrl, imagePrompt: undefined };
+              }
+            } catch (error) {
+              console.error("Error generating item image:", error);
+            }
+            return { ...item, imagePrompt: undefined };
+          })
+        );
+
+        // Calculate totals
+        const totalItemsCost = itemsWithImages.reduce((sum: number, item: any) => sum + (item.price || 0), 0);
+        const totalBagCost = totalItemsCost + (bag.bagPrice || 0);
+
+        return {
+          bagTitle: bag.bagTitle,
+          bagDescription: bag.bagDescription,
+          bagPrice: bag.bagPrice || 0,
+          bagBuyLink: bag.bagBuyLink,
+          bagImageUrl,
+          items: itemsWithImages,
+          totalItemsCost,
+          totalBagCost
+        };
       })
     );
 
     // Calculate pricing
-    const budgetMatch = budget.match(/[\d.]+/);
-    const avgBudget = budgetMatch ? parseFloat(budgetMatch[0]) : 10;
-    const pricePerBag = avgBudget * recommendationsWithImages.length;
-    const totalCost = pricePerBag * (quantity || 1);
+    const avgPricePerBag = bagsWithImages.reduce((sum, bag) => sum + bag.totalBagCost, 0) / bagsWithImages.length;
+    const totalCost = avgPricePerBag * (quantity || 1);
 
     console.log("Sending complete recommendations with images and pricing");
 
     return new Response(
       JSON.stringify({ 
-        recommendations: recommendationsWithImages,
         bags: bagsWithImages,
         quantity: quantity || 1,
-        pricePerBag,
+        pricePerBag: avgPricePerBag,
         totalCost
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

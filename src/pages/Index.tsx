@@ -4,26 +4,28 @@ import { GiftForm } from "@/components/GiftForm";
 import { GiftResults } from "@/components/GiftResults";
 import { Gift, Sparkles, Heart } from "lucide-react";
 
-export interface GiftRecommendation {
+export interface GiftItem {
   title: string;
   description: string;
-  price: string;
+  price: number;
   category: string;
   buyLink: string;
   imageUrl?: string;
 }
 
-export interface BagRecommendation {
-  title: string;
-  description: string;
-  price: string;
-  buyLink: string;
-  imageUrl?: string;
+export interface BagWithContents {
+  bagTitle: string;
+  bagDescription: string;
+  bagPrice: number;
+  bagBuyLink: string;
+  bagImageUrl?: string;
+  items: GiftItem[];
+  totalItemsCost: number;
+  totalBagCost: number;
 }
 
 export interface RecommendationResponse {
-  recommendations: GiftRecommendation[];
-  bags: BagRecommendation[];
+  bags: BagWithContents[];
   quantity: number;
   pricePerBag: number;
   totalCost: number;
