@@ -24,6 +24,9 @@ export interface BagRecommendation {
 export interface RecommendationResponse {
   recommendations: GiftRecommendation[];
   bags: BagRecommendation[];
+  quantity: number;
+  pricePerBag: number;
+  totalCost: number;
 }
 
 const Index = () => {
@@ -40,7 +43,7 @@ const Index = () => {
   };
 
   if (results) {
-    return <GiftResults results={results} onReset={handleReset} />;
+    return <GiftResults results={results} onBack={handleReset} />;
   }
 
   if (showForm) {

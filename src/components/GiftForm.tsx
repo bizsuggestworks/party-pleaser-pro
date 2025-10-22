@@ -22,11 +22,16 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
     eventType: "",
     budget: "",
     requirement: "",
+    nationality: "",
+    kids: [] as Array<{ age: string; gender: string }>,
     theme: "",
-    bagPreference: "",
+    bagSize: "",
   });
 
-  const handleNext = () => {
+  const [themeOptions, setThemeOptions] = useState<string[]>([]);
+  const [loadingThemes, setLoadingThemes] = useState(false);
+
+  const handleNext = async () => {
     if (step === 1 && !formData.eventType) {
       toast({ title: "Please select an event type", variant: "destructive" });
       return;
@@ -39,23 +44,66 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
       toast({ title: "Please select a requirement type", variant: "destructive" });
       return;
     }
-    if (step === 4 && !formData.theme) {
-      toast({ title: "Please describe your theme preferences", variant: "destructive" });
+    if (step === 4) {
+      if (!formData.nationality || formData.kids.length === 0) {
+        toast({ title: "Please add at least one kid with nationality", variant: "destructive" });
+        return;
+      }
+      // Generate theme options based on demographics
+      setLoadingThemes(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("generate-gift-recommendations", {
+          body: { 
+            action: "generate-themes",
+            nationality: formData.nationality,
+            kids: formData.kids
+          },
+        });
+        if (error) throw error;
+        setThemeOptions(data.themes || []);
+      } catch (error) {
+        console.error("Error generating themes:", error);
+        toast({ title: "Error generating themes", variant: "destructive" });
+      } finally {
+        setLoadingThemes(false);
+      }
+    }
+    if (step === 5 && !formData.theme) {
+      toast({ title: "Please select a theme", variant: "destructive" });
       return;
     }
     setStep(step + 1);
   };
 
+  const addKid = () => {
+    setFormData({ ...formData, kids: [...formData.kids, { age: "", gender: "" }] });
+  };
+
+  const updateKid = (index: number, field: "age" | "gender", value: string) => {
+    const newKids = [...formData.kids];
+    newKids[index][field] = value;
+    setFormData({ ...formData, kids: newKids });
+  };
+
+  const removeKid = (index: number) => {
+    const newKids = formData.kids.filter((_, i) => i !== index);
+    setFormData({ ...formData, kids: newKids });
+  };
+
   const handleSubmit = async () => {
-    if (!formData.bagPreference) {
-      toast({ title: "Please describe your bag preferences", variant: "destructive" });
+    if (!formData.bagSize) {
+      toast({ title: "Please select a bag size", variant: "destructive" });
       return;
     }
 
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("generate-gift-recommendations", {
-        body: formData,
+        body: { 
+          action: "generate-recommendations",
+          ...formData,
+          quantity: formData.kids.length
+        },
       });
 
       if (error) throw error;
@@ -78,7 +126,7 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
       <div className="w-full max-w-2xl bg-card rounded-3xl shadow-glow p-8 md:p-12 border border-border">
         <div className="mb-8">
           <div className="flex justify-between mb-2">
-            {[1, 2, 3, 4, 5].map((s) => (
+            {[1, 2, 3, 4, 5, 6].map((s) => (
               <div
                 key={s}
                 className={`h-2 flex-1 rounded-full mx-1 transition-all duration-300 ${
@@ -88,7 +136,7 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
             ))}
           </div>
           <p className="text-sm text-muted-foreground text-center mt-4">
-            Step {step} of 5
+            Step {step} of 6
           </p>
         </div>
 
@@ -162,19 +210,66 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
           <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
             <div>
               <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Any specific themes?
+                Tell us about the kids
               </h2>
-              <p className="text-muted-foreground">Tell us about the theme or interests (e.g., LEGO, Minecraft, K-pop)</p>
+              <p className="text-muted-foreground">Add details for each kid attending</p>
             </div>
             <div>
-              <Label htmlFor="theme" className="text-lg">Theme or Interests</Label>
-              <Textarea
-                id="theme"
-                placeholder="e.g., Kids love LEGO and Minecraft, girls prefer K-pop themed items..."
-                value={formData.theme}
-                onChange={(e) => setFormData({ ...formData, theme: e.target.value })}
-                className="mt-2 min-h-32 text-lg p-4 rounded-xl"
+              <Label htmlFor="nationality" className="text-lg">Nationality</Label>
+              <Input
+                id="nationality"
+                type="text"
+                placeholder="e.g., American, Indian, British"
+                value={formData.nationality}
+                onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                className="mt-2 text-lg p-6 rounded-xl"
               />
+            </div>
+            <div className="space-y-4">
+              <Label className="text-lg">Kids Information</Label>
+              {formData.kids.map((kid, index) => (
+                <div key={index} className="flex gap-3 items-end">
+                  <div className="flex-1">
+                    <Input
+                      type="number"
+                      placeholder="Age"
+                      value={kid.age}
+                      onChange={(e) => updateKid(index, "age", e.target.value)}
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <RadioGroup value={kid.gender} onValueChange={(v) => updateKid(index, "gender", v)}>
+                      <div className="flex gap-4">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="boy" id={`boy-${index}`} />
+                          <Label htmlFor={`boy-${index}`}>Boy</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="girl" id={`girl-${index}`} />
+                          <Label htmlFor={`girl-${index}`}>Girl</Label>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => removeKid(index)}
+                    className="rounded-xl"
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addKid}
+                className="w-full rounded-xl"
+              >
+                Add Kid
+              </Button>
             </div>
           </div>
         )}
@@ -183,20 +278,44 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
           <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
             <div>
               <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Gift Bag Preferences
+                Select a Theme
               </h2>
-              <p className="text-muted-foreground">What should the gift bag look like?</p>
+              <p className="text-muted-foreground">Choose from personalized theme suggestions</p>
             </div>
+            {loadingThemes ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <p className="ml-3 text-muted-foreground">Generating themes...</p>
+              </div>
+            ) : (
+              <RadioGroup value={formData.theme} onValueChange={(v) => setFormData({ ...formData, theme: v })}>
+                {themeOptions.map((theme) => (
+                  <div key={theme} className="flex items-center space-x-3 p-4 rounded-xl border border-border hover:border-primary transition-colors cursor-pointer">
+                    <RadioGroupItem value={theme} id={theme} />
+                    <Label htmlFor={theme} className="cursor-pointer flex-1 text-lg">{theme}</Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            )}
+          </div>
+        )}
+
+        {step === 6 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
             <div>
-              <Label htmlFor="bagPreference" className="text-lg">Bag Style & Design</Label>
-              <Textarea
-                id="bagPreference"
-                placeholder="e.g., Colorful paper bags with cartoon characters, fabric pouches with the event theme, eco-friendly kraft bags..."
-                value={formData.bagPreference}
-                onChange={(e) => setFormData({ ...formData, bagPreference: e.target.value })}
-                className="mt-2 min-h-32 text-lg p-4 rounded-xl"
-              />
+              <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                Choose Bag Size
+              </h2>
+              <p className="text-muted-foreground">Select the perfect size for your gifts</p>
             </div>
+            <RadioGroup value={formData.bagSize} onValueChange={(v) => setFormData({ ...formData, bagSize: v })}>
+              {["Small (6-8 items)", "Medium (9-12 items)", "Large (13+ items)"].map((size) => (
+                <div key={size} className="flex items-center space-x-3 p-4 rounded-xl border border-border hover:border-primary transition-colors cursor-pointer">
+                  <RadioGroupItem value={size} id={size} />
+                  <Label htmlFor={size} className="cursor-pointer flex-1 text-lg">{size}</Label>
+                </div>
+              ))}
+            </RadioGroup>
           </div>
         )}
 
@@ -212,13 +331,23 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
               Back
             </Button>
           )}
-          {step < 5 ? (
+          {step < 6 ? (
             <Button
               onClick={handleNext}
+              disabled={loadingThemes}
               className="flex-1 py-6 rounded-xl text-lg bg-gradient-to-r from-primary to-accent"
             >
-              Next
-              <ArrowRight className="ml-2 w-5 h-5" />
+              {loadingThemes ? (
+                <>
+                  <Loader2 className="mr-2 w-5 h-5 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  Next
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </>
+              )}
             </Button>
           ) : (
             <Button

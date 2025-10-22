@@ -11,14 +11,58 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const { eventType, budget, requirement, theme, bagPreference } = await req.json();
-    console.log("Generating gift recommendations for:", { eventType, budget, requirement, theme, bagPreference });
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    throw new Error('LOVABLE_API_KEY is not configured');
+  }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+  try {
+    const body = await req.json();
+    const { action } = body;
+    console.log("Request received:", { action, body });
+
+    // Handle theme generation
+    if (action === "generate-themes") {
+      const { nationality, kids } = body;
+      
+      const themePrompt = `Based on these demographics, suggest 5 popular gift themes that would be perfect:
+Nationality: ${nationality}
+Kids: ${kids.map((k: any) => `${k.age} year old ${k.gender}`).join(", ")}
+
+Consider age-appropriate themes, gender preferences, and cultural relevance. Return ONLY a JSON array of theme names.
+Example format: ["LEGO & Building", "K-pop & Music", "Sports & Outdoor"]`;
+
+      const themeResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [{ role: 'user', content: themePrompt }],
+          temperature: 0.8,
+        }),
+      });
+
+      if (!themeResponse.ok) {
+        throw new Error(`Theme generation failed: ${themeResponse.status}`);
+      }
+
+      const themeData = await themeResponse.json();
+      const themesText = themeData.choices[0].message.content;
+      const themesMatch = themesText.match(/\[[\s\S]*\]/);
+      const themes = themesMatch ? JSON.parse(themesMatch[0]) : [];
+
+      return new Response(
+        JSON.stringify({ themes }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    // Handle gift recommendations
+    const { eventType, budget, requirement, theme, bagSize, quantity } = body;
+    console.log("Generating gift recommendations for:", { eventType, budget, requirement, theme, bagSize, quantity });
 
     // Generate gift recommendations with images
     const giftSystemPrompt = `You are an expert gift recommendation assistant. Based on the user's preferences, suggest 6 perfect return gifts.
@@ -154,10 +198,11 @@ Return ONLY valid JSON in this exact format:
 
     const bagUserPrompt = `Event: ${eventType}
 Budget: ${budget}
-Bag Preference: ${bagPreference}
+Bag Size: ${bagSize}
 Theme: ${theme}
+Quantity Needed: ${quantity}
 
-Generate 3 gift bag recommendations that match the theme and can fit the return gifts.`;
+Generate 3 gift bag recommendations that match the theme and size requirements.`;
 
     console.log("Requesting bag recommendations from AI...");
     const bagResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -236,12 +281,21 @@ Generate 3 gift bag recommendations that match the theme and can fit the return 
       })
     );
 
-    console.log("Sending complete recommendations with images");
+    // Calculate pricing
+    const budgetMatch = budget.match(/[\d.]+/);
+    const avgBudget = budgetMatch ? parseFloat(budgetMatch[0]) : 10;
+    const pricePerBag = avgBudget * recommendationsWithImages.length;
+    const totalCost = pricePerBag * (quantity || 1);
+
+    console.log("Sending complete recommendations with images and pricing");
 
     return new Response(
       JSON.stringify({ 
         recommendations: recommendationsWithImages,
-        bags: bagsWithImages
+        bags: bagsWithImages,
+        quantity: quantity || 1,
+        pricePerBag,
+        totalCost
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

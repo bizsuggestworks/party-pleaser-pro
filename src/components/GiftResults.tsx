@@ -1,14 +1,30 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { ExternalLink, RotateCcw, Gift, ShoppingBag } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ExternalLink, ArrowLeft, ShoppingCart, Gift, ShoppingBag } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import type { RecommendationResponse } from "@/pages/Index";
 
 interface GiftResultsProps {
   results: RecommendationResponse;
-  onReset: () => void;
+  onBack: () => void;
 }
 
-export const GiftResults = ({ results, onReset }: GiftResultsProps) => {
+export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
+  const [quantity, setQuantity] = useState(results.quantity || 1);
+  const { toast } = useToast();
+
+  const totalCost = (results.pricePerBag || 0) * quantity;
+
+  const handleCheckout = () => {
+    toast({
+      title: "Checkout",
+      description: `Proceeding to checkout for ${quantity} bags at $${totalCost.toFixed(2)}`,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background">
       <div className="container mx-auto px-4 py-12">
@@ -23,6 +39,53 @@ export const GiftResults = ({ results, onReset }: GiftResultsProps) => {
             AI-generated visuals and curated selections for your event
           </p>
         </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <Button
+            onClick={onBack}
+            variant="outline"
+            className="rounded-xl"
+          >
+            <ArrowLeft className="mr-2 w-4 h-4" />
+            Start Over
+          </Button>
+        </div>
+
+        {/* Pricing and Quantity Section */}
+        <Card className="mb-8 border-primary/20 bg-gradient-to-br from-primary/5 to-accent/5">
+          <CardContent className="p-6">
+            <div className="grid md:grid-cols-3 gap-6">
+              <div>
+                <Label htmlFor="quantity" className="text-lg font-semibold">Number of Bags</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                  className="mt-2 text-lg p-6 rounded-xl"
+                />
+              </div>
+              <div className="flex flex-col justify-center">
+                <p className="text-sm text-muted-foreground">Price per bag</p>
+                <p className="text-3xl font-bold text-primary">${results.pricePerBag?.toFixed(2) || "0.00"}</p>
+              </div>
+              <div className="flex flex-col justify-center">
+                <p className="text-sm text-muted-foreground">Total Cost</p>
+                <p className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  ${totalCost.toFixed(2)}
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={handleCheckout}
+              className="w-full mt-6 py-6 rounded-xl text-lg bg-gradient-to-r from-primary to-accent"
+            >
+              <ShoppingCart className="mr-2 w-5 h-5" />
+              Proceed to Checkout
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Gift Recommendations */}
         <div className="mb-16">
@@ -119,18 +182,6 @@ export const GiftResults = ({ results, onReset }: GiftResultsProps) => {
               </Card>
             ))}
           </div>
-        </div>
-
-        <div className="flex justify-center">
-          <Button
-            onClick={onReset}
-            variant="outline"
-            size="lg"
-            className="rounded-full px-8 py-6 text-lg border-2"
-          >
-            <RotateCcw className="mr-2 w-5 h-5" />
-            Start Over
-          </Button>
         </div>
       </div>
     </div>
