@@ -10,23 +10,37 @@ export interface GiftRecommendation {
   price: string;
   category: string;
   buyLink: string;
+  imageUrl?: string;
+}
+
+export interface BagRecommendation {
+  title: string;
+  description: string;
+  price: string;
+  buyLink: string;
+  imageUrl?: string;
+}
+
+export interface RecommendationResponse {
+  recommendations: GiftRecommendation[];
+  bags: BagRecommendation[];
 }
 
 const Index = () => {
   const [showForm, setShowForm] = useState(false);
-  const [recommendations, setRecommendations] = useState<GiftRecommendation[]>([]);
+  const [results, setResults] = useState<RecommendationResponse | null>(null);
 
-  const handleFormComplete = (results: GiftRecommendation[]) => {
-    setRecommendations(results);
+  const handleFormComplete = (data: RecommendationResponse) => {
+    setResults(data);
   };
 
   const handleReset = () => {
     setShowForm(false);
-    setRecommendations([]);
+    setResults(null);
   };
 
-  if (recommendations.length > 0) {
-    return <GiftResults recommendations={recommendations} onReset={handleReset} />;
+  if (results) {
+    return <GiftResults results={results} onReset={handleReset} />;
   }
 
   if (showForm) {

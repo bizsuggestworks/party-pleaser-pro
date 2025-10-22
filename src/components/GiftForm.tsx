@@ -7,10 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
-import type { GiftRecommendation } from "@/pages/Index";
+import type { RecommendationResponse } from "@/pages/Index";
 
 interface GiftFormProps {
-  onComplete: (results: GiftRecommendation[]) => void;
+  onComplete: (results: RecommendationResponse) => void;
 }
 
 export const GiftForm = ({ onComplete }: GiftFormProps) => {
@@ -23,6 +23,7 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
     budget: "",
     requirement: "",
     theme: "",
+    bagPreference: "",
   });
 
   const handleNext = () => {
@@ -38,12 +39,16 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
       toast({ title: "Please select a requirement type", variant: "destructive" });
       return;
     }
+    if (step === 4 && !formData.theme) {
+      toast({ title: "Please describe your theme preferences", variant: "destructive" });
+      return;
+    }
     setStep(step + 1);
   };
 
   const handleSubmit = async () => {
-    if (!formData.theme) {
-      toast({ title: "Please describe your theme preferences", variant: "destructive" });
+    if (!formData.bagPreference) {
+      toast({ title: "Please describe your bag preferences", variant: "destructive" });
       return;
     }
 
@@ -55,7 +60,7 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
 
       if (error) throw error;
 
-      onComplete(data.recommendations);
+      onComplete(data);
     } catch (error) {
       console.error("Error generating recommendations:", error);
       toast({
@@ -73,7 +78,7 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
       <div className="w-full max-w-2xl bg-card rounded-3xl shadow-glow p-8 md:p-12 border border-border">
         <div className="mb-8">
           <div className="flex justify-between mb-2">
-            {[1, 2, 3, 4].map((s) => (
+            {[1, 2, 3, 4, 5].map((s) => (
               <div
                 key={s}
                 className={`h-2 flex-1 rounded-full mx-1 transition-all duration-300 ${
@@ -83,7 +88,7 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
             ))}
           </div>
           <p className="text-sm text-muted-foreground text-center mt-4">
-            Step {step} of 4
+            Step {step} of 5
           </p>
         </div>
 
@@ -174,6 +179,27 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
           </div>
         )}
 
+        {step === 5 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-500">
+            <div>
+              <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                Gift Bag Preferences
+              </h2>
+              <p className="text-muted-foreground">What should the gift bag look like?</p>
+            </div>
+            <div>
+              <Label htmlFor="bagPreference" className="text-lg">Bag Style & Design</Label>
+              <Textarea
+                id="bagPreference"
+                placeholder="e.g., Colorful paper bags with cartoon characters, fabric pouches with the event theme, eco-friendly kraft bags..."
+                value={formData.bagPreference}
+                onChange={(e) => setFormData({ ...formData, bagPreference: e.target.value })}
+                className="mt-2 min-h-32 text-lg p-4 rounded-xl"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-4 mt-8">
           {step > 1 && (
             <Button
@@ -186,7 +212,7 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
               Back
             </Button>
           )}
-          {step < 4 ? (
+          {step < 5 ? (
             <Button
               onClick={handleNext}
               className="flex-1 py-6 rounded-xl text-lg bg-gradient-to-r from-primary to-accent"
@@ -203,7 +229,7 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 w-5 h-5 animate-spin" />
-                  Generating...
+                  Generating with AI...
                 </>
               ) : (
                 <>
