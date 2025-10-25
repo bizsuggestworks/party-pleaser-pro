@@ -1,7 +1,7 @@
 // Stripe Configuration
 export const STRIPE_CONFIG = {
-  // For development/testing, use test publishable key
-  publishableKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "pk_test_placeholder", // Replace with your Stripe test key
+  // For development, disable Stripe to avoid tracking warnings
+  publishableKey: import.meta.env.MODE === 'development' ? null : (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "pk_test_placeholder"),
   
   // For production, you would use your live publishable key:
   // publishableKey: "pk_live_YOUR_LIVE_KEY_HERE",

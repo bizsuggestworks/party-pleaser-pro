@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import { PaymentSuccess } from "./pages/PaymentSuccess";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { ChatBot } from "@/components/ChatBot";
+import { DevModeIndicator } from "@/components/DevModeIndicator";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           <ChatBot />
+          <DevModeIndicator />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

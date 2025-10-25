@@ -253,23 +253,22 @@ export const LoginScreen = ({ onClose }: LoginScreenProps) => {
             </Button>
             
             {/* Demo Authentication for Testing */}
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800 font-medium mb-2">Demo Mode</p>
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800 font-medium mb-2">Quick Demo Access</p>
               <Button
                 onClick={() => {
                   signInDemo();
                   toast({
                     title: "Demo Login",
-                    description: "Logged in as demo user for testing purposes.",
+                    description: "Logged in as demo user with admin access.",
                   });
                   onClose();
                 }}
-                variant="outline"
-                className="w-full text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+                className="w-full bg-green-600 text-white hover:bg-green-700"
                 disabled={loading}
               >
                 <User className="w-4 h-4 mr-2" />
-                Demo Login (Testing)
+                Demo Login (Admin Access)
               </Button>
             </div>
           </div>

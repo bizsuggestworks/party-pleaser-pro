@@ -44,7 +44,7 @@ interface PaymentFormProps {
   onCancel: () => void;
 }
 
-const stripePromise = loadStripe(STRIPE_CONFIG.publishableKey);
+const stripePromise = STRIPE_CONFIG.publishableKey ? loadStripe(STRIPE_CONFIG.publishableKey) : null;
 
 // Stripe Card Component
 const StripeCardForm = ({ 
@@ -525,22 +525,35 @@ export const PaymentForm = ({
             </TabsList>
             
             <TabsContent value="card" className="space-y-4">
-              <Elements stripe={stripePromise} options={STRIPE_CONFIG.elementsOptions}>
-                <StripeCardForm
-                  customerInfo={customerInfo}
-                  totalAmount={totalAmount}
-                  quantity={quantity}
-                  personalization={personalization}
-                  onPaymentSuccess={onPaymentSuccess}
-                  onError={(error) => {
-                    toast({
-                      title: "Payment Failed",
-                      description: error,
-                      variant: "destructive",
-                    });
-                  }}
-                />
-              </Elements>
+              {stripePromise ? (
+                <Elements stripe={stripePromise} options={STRIPE_CONFIG.elementsOptions}>
+                  <StripeCardForm
+                    customerInfo={customerInfo}
+                    totalAmount={totalAmount}
+                    quantity={quantity}
+                    personalization={personalization}
+                    onPaymentSuccess={onPaymentSuccess}
+                    onError={(error) => {
+                      toast({
+                        title: "Payment Failed",
+                        description: error,
+                        variant: "destructive",
+                      });
+                    }}
+                  />
+                </Elements>
+              ) : (
+                <div className="p-6 text-center">
+                  <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Stripe Disabled in Development</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Credit card payments are disabled in development mode to avoid tracking warnings.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Use PayPal or Google Pay for testing, or enable Stripe in production.
+                  </p>
+                </div>
+              )}
             </TabsContent>
             
             <TabsContent value="paypal" className="text-center py-8">

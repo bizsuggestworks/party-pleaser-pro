@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { GiftForm } from "@/components/GiftForm";
 import { GiftResults } from "@/components/GiftResults";
@@ -37,7 +38,16 @@ const Index = () => {
   const [showForm, setShowForm] = useState(false);
   const [results, setResults] = useState<RecommendationResponse | null>(null);
   const [showLogin, setShowLogin] = useState(false);
-  const { user, signOut, isAdmin } = useAuth();
+  const [forceUpdate, setForceUpdate] = useState(0);
+  const { user, signOut, isAdmin, loading } = useAuth();
+  const navigate = useNavigate();
+  
+  // cleaned up debug logs
+
+  // Force re-render when auth state changes
+  useEffect(() => {
+    setForceUpdate(prev => prev + 1);
+  }, [user, isAdmin]);
 
   const handleFormComplete = (data: RecommendationResponse) => {
     setResults(data);
@@ -57,24 +67,45 @@ const Index = () => {
   }
 
   if (showLogin) {
+    console.log('Showing login screen');
     return <LoginScreen onClose={() => setShowLogin(false)} />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
+      {/* Debug UI removed */}
+      
+      {/* Temporary Admin Link for Testing - Remove in production */}
+      {/* {user && isAdmin && (
+        <div style={{position: 'fixed', top: '10px', left: '10px', background: 'yellow', padding: '10px', zIndex: 9999}}>
+          <a href="/admin" style={{color: 'black', textDecoration: 'none'}}>Direct Admin Link</a>
+        </div>
+      )} */}
+      
       {/* Header with Authentication */}
-      <div className="absolute top-4 right-4 z-10">
+      <div className="absolute top-4 right-4 z-50 pointer-events-auto" key={`auth-${user?.id || 'no-user'}`}>
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Welcome, {user.email}</span>
             {isAdmin && (
               <Button
-                onClick={() => window.location.href = '/admin'}
+                onClick={() => {
+                  console.log('Admin Dashboard button clicked');
+                  console.log('Current location:', window.location.pathname);
+                  console.log('Navigating to /admin');
+                  try {
+                    navigate('/admin');
+                    console.log('Navigation called successfully');
+                  } catch (error) {
+                    console.error('Navigation error:', error);
+                  }
+                }}
                 variant="outline"
                 size="sm"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 <Settings className="w-4 h-4 mr-2" />
-                Admin
+                Admin Dashboard
               </Button>
             )}
             <Button onClick={signOut} variant="outline" size="sm">
@@ -83,17 +114,27 @@ const Index = () => {
             </Button>
           </div>
         ) : (
-          <Button onClick={() => setShowLogin(true)} variant="outline">
-            <User className="w-4 h-4 mr-2" />
-            Sign In
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => {
+                console.log('Sign in button clicked');
+                console.log('Current showLogin state:', showLogin);
+                setShowLogin(true);
+                console.log('Set showLogin to true');
+              }} 
+              variant="outline"
+            >
+              <User className="w-4 h-4 mr-2" />
+              Sign In
+            </Button>
+          </div>
         )}
       </div>
       
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         {/* Background Gift Images */}
-        <div className="absolute inset-0 opacity-10">
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
           <div className="grid grid-cols-4 gap-4 h-full">
             <div className="bg-gradient-to-br from-pink-200 to-purple-300 rounded-2xl m-2"></div>
             <div className="bg-gradient-to-br from-blue-200 to-cyan-300 rounded-2xl m-2"></div>
@@ -111,12 +152,12 @@ const Index = () => {
                   <Gift className="w-20 h-20 text-purple-600 animate-bounce" />
                   <Sparkles className="w-8 h-8 text-yellow-500 absolute -top-2 -right-2 animate-pulse" />
                 </div>
-                <div className="text-left">
-                  <h1 className="text-6xl md:text-8xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent">
-                    Gifity
-                  </h1>
-                  <p className="text-lg text-gray-600 font-medium">Where Every Gift Tells a Story</p>
-                </div>
+                 <div className="text-left">
+                   <h1 className="text-6xl md:text-8xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent">
+                     Giftify
+                   </h1>
+                   <p className="text-lg text-gray-600 font-medium">Where Every Gift Tells a Story</p>
+                 </div>
               </div>
               
               <h2 className="text-3xl md:text-5xl font-bold text-gray-800 max-w-4xl mx-auto leading-tight">

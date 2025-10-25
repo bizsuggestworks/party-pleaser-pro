@@ -30,14 +30,58 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    // Get initial session
+    console.log('=== AUTH CONTEXT INIT ===');
+    // Check for demo session first
+    const demoSession = localStorage.getItem('demo-session');
+    console.log('Demo session in localStorage:', demoSession);
+    if (demoSession) {
+      try {
+        const { user, session, timestamp } = JSON.parse(demoSession);
+        // Check if demo session is still valid (24 hours) AND has correct email
+        if (Date.now() - timestamp < 24 * 60 * 60 * 1000 && user.email === 'demo@giftify.com') {
+          setUser(user);
+          setSession(session);
+          checkAdminStatus(user);
+          setLoading(false);
+          console.log('Demo session restored:', user);
+          return;
+        } else {
+          // Remove expired or outdated demo session
+          localStorage.removeItem('demo-session');
+          console.log('Demo session removed (expired or outdated email)');
+        }
+      } catch (error) {
+        console.error('Error restoring demo session:', error);
+        localStorage.removeItem('demo-session');
+      }
+    } else {
+      console.log('No demo session found in localStorage');
+    }
+
+    // Also check for old email format and clear it
+    if (demoSession) {
+      try {
+        const { user } = JSON.parse(demoSession);
+        if (user.email === 'demo@gifityy.com') {
+          localStorage.removeItem('demo-session');
+          console.log('Old demo session cleared (gifityy.com email)');
+        }
+      } catch (error) {
+        // Ignore parsing errors
+      }
+    }
+
+    // Get initial session from Supabase
+    console.log('Getting initial session from Supabase...');
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Supabase session:', session);
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         checkAdminStatus(session.user);
       }
       setLoading(false);
+      console.log('Auth context initialization complete');
     });
 
     // Listen for auth changes
@@ -57,9 +101,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkAdminStatus = async (user: User) => {
     // Check if user is admin based on email or user metadata
-    const adminEmails = ['admin@partypresentpro.com', 'venne@example.com']; // Add your admin emails
+    const adminEmails = [
+      'admin@partypresentpro.com', 
+      'venne@example.com',
+      'demo@giftify.com', // Demo user is admin for testing
+      'admin@giftify.com'
+    ];
     const isAdminUser = adminEmails.includes(user.email || '');
     setIsAdmin(isAdminUser);
+    console.log('Admin check:', { email: user.email, isAdmin: isAdminUser });
   };
 
   const signInWithGoogle = async () => {
@@ -95,10 +145,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signInDemo = () => {
+    console.log('=== DEMO SIGN-IN START ===');
+    console.log('Starting demo sign-in...');
+    console.log('Current user before:', user);
+    console.log('Current loading state:', loading);
+    console.log('Current isAdmin state:', isAdmin);
+    
+    // Clear any existing demo session first
+    localStorage.removeItem('demo-session');
+    
     // Create a demo user object
     const demoUser: User = {
       id: 'demo-user-123',
-      email: 'demo@gifityy.com',
+      email: 'demo@giftify.com',
       user_metadata: { 
         full_name: 'Demo User',
         avatar_url: null
@@ -142,22 +201,61 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       user: demoUser
     };
 
+    // Set the demo user and session
     setUser(demoUser);
     setSession(demoSession);
+    setLoading(false);
+    
+    // Check admin status
     checkAdminStatus(demoUser);
     
-    console.log('Demo user signed in');
+    console.log('Demo user signed in successfully:', demoUser);
+    console.log('User state set to:', demoUser);
+    console.log('Session state set to:', demoSession);
+    
+    // Check admin status manually
+    const adminEmails = [
+      'admin@partypresentpro.com', 
+      'venne@example.com',
+      'demo@giftify.com', // Demo user is admin for testing
+      'admin@giftify.com'
+    ];
+    const isAdminUser = adminEmails.includes(demoUser.email);
+    setIsAdmin(isAdminUser);
+    console.log('Admin status:', isAdminUser);
+    
+    // Store demo session in localStorage for persistence
+    localStorage.setItem('demo-session', JSON.stringify({
+      user: demoUser,
+      session: demoSession,
+      timestamp: Date.now()
+    }));
+    
+    console.log('=== DEMO SIGN-IN COMPLETE ===');
+    console.log('Final user state:', user);
+    console.log('Final loading state:', loading);
+    console.log('Final isAdmin state:', isAdmin);
+    console.log('Demo session stored in localStorage');
   };
 
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      // Clear demo session if it exists
+      localStorage.removeItem('demo-session');
+      
+      // Try to sign out from Supabase (might fail if not signed in)
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.log('Supabase sign out error (expected for demo):', error);
+      } catch (error) {
+        console.log('Supabase sign out error (expected for demo):', error);
+      }
       
       // Clear local state
       setUser(null);
       setSession(null);
       setIsAdmin(false);
+      setLoading(false);
       
       console.log('Successfully signed out');
     } catch (error) {
@@ -166,7 +264,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(null);
       setSession(null);
       setIsAdmin(false);
+      setLoading(false);
     }
+  };
+
+  // Force clear all sessions and reset
+  const clearAllSessions = () => {
+    localStorage.removeItem('demo-session');
+    setUser(null);
+    setSession(null);
+    setIsAdmin(false);
+    setLoading(false);
+    console.log('All sessions cleared');
   };
 
   const value = {
@@ -177,8 +286,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signInWithInstagram,
     signInDemo,
     signOut,
+    clearAllSessions,
     isAdmin,
   };
+
+  // Expose auth state to window for debugging
+  useEffect(() => {
+    (window as any).user = user;
+    (window as any).loading = loading;
+    (window as any).isAdmin = isAdmin;
+    (window as any).session = session;
+    (window as any).signInDemo = signInDemo;
+    (window as any).signOut = signOut;
+    (window as any).clearAllSessions = clearAllSessions;
+  }, [user, loading, isAdmin, session, signInDemo, signOut, clearAllSessions]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

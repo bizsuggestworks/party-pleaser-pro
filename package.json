@@ -1,8 +1,8 @@
 {
-  "name": "gifity",
+  "name": "giftify",
   "private": true,
   "version": "1.0.0",
-  "description": "Gifity - Perfect Return Gifts for Every Event",
+  "description": "Giftify - Perfect Return Gifts for Every Event",
   "type": "module",
   "scripts": {
     "dev": "vite",
