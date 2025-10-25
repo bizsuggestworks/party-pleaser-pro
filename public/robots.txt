@@ -1,14 +1,12 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
 User-agent: *
 Allow: /
+
+# Sitemap
+Sitemap: https://giftify.com/sitemap.xml
+
+# Disallow admin area for non-authenticated users
+Disallow: /admin
+
+# Allow all other pages
+Allow: /
+Allow: /payment-success
