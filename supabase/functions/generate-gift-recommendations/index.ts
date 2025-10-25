@@ -25,9 +25,9 @@ Deno.serve(async (req) => {
 
     // Handle theme generation with mock data
     if (action === "generate-themes") {
-      const { nationality, kids } = body;
+      const { kids } = body;
       
-      // Mock themes based on age and nationality
+      // Mock themes based on age
       const mockThemes = [
         "LEGO & Building Blocks",
         "Art & Crafts",
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       ];
 
       // Filter themes based on kids' ages
-      const ageAppropriateThemes = kids.some((k: any) => k.age < 5) 
+      const ageAppropriateThemes = kids.some((k: any) => parseInt(k.age) < 5) 
         ? mockThemes.filter(theme => !theme.includes("STEM") && !theme.includes("Board Games"))
         : mockThemes;
 

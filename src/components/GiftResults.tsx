@@ -18,6 +18,7 @@ interface GiftResultsProps {
 
 export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
   const [quantity, setQuantity] = useState(results.quantity || 1);
+  const [selectedBagIndex, setSelectedBagIndex] = useState(0); // Track which bag is selected
   const [showCheckout, setShowCheckout] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [personalization, setPersonalization] = useState({
@@ -54,11 +55,11 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
             personalization={personalization}
             giftSelections={{
               eventType: "Birthday Party", // This would come from the form data
-              theme: results.bags[0]?.items[0]?.category || "General",
+              theme: results.bags[selectedBagIndex]?.items[0]?.category || "General",
               budget: "Within Budget",
               bagSize: "Medium",
               kids: [], // This would come from the form data
-              bags: results.bags
+              bags: [results.bags[selectedBagIndex]] // Only pass the selected bag
             }}
             onPaymentSuccess={handlePaymentSuccess}
             onCancel={handleCancelPayment}
@@ -210,13 +211,29 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
             <ShoppingBag className="w-8 h-8 text-primary" />
             Complete Gift Bag Options
           </h2>
-          <p className="text-muted-foreground mb-6">Each bag includes all items shown below and stays within your budget</p>
+          <p className="text-muted-foreground mb-6">Click on a bag to select it. Each bag includes all items shown below and stays within your budget</p>
+          
+          {/* Selected Bag Indicator */}
+          <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-xl">
+            <div className="flex items-center gap-3">
+              <Package className="w-6 h-6 text-primary" />
+              <div>
+                <p className="font-semibold text-primary">Selected: {results.bags[selectedBagIndex]?.bagTitle}</p>
+                <p className="text-sm text-muted-foreground">{results.bags[selectedBagIndex]?.bagDescription}</p>
+              </div>
+            </div>
+          </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {results.bags.map((bag, bagIndex) => (
               <Card 
                 key={bagIndex} 
-                className="overflow-hidden rounded-2xl shadow-card hover:shadow-glow transition-all duration-300 border-border"
+                className={`overflow-hidden rounded-2xl shadow-card hover:shadow-glow transition-all duration-300 border-2 cursor-pointer ${
+                  selectedBagIndex === bagIndex 
+                    ? 'border-primary bg-primary/5 shadow-glow' 
+                    : 'border-border hover:border-primary/50'
+                }`}
+                onClick={() => setSelectedBagIndex(bagIndex)}
               >
                 {/* Bag Header */}
                 {bag.bagImageUrl && (
@@ -231,8 +248,15 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
                 
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold mb-2">{bag.bagTitle}</h3>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="text-xl font-bold">{bag.bagTitle}</h3>
+                        {selectedBagIndex === bagIndex && (
+                          <span className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded-full">
+                            Selected
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">{bag.bagDescription}</p>
                     </div>
                     <Package className="w-8 h-8 text-primary flex-shrink-0" />

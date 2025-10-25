@@ -22,7 +22,6 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
     eventType: "",
     budget: "",
     requirement: "",
-    nationality: "",
     kids: [] as Array<{ age: string; gender: string }>,
     theme: "",
     bagSize: "",
@@ -45,8 +44,17 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
       return;
     }
     if (step === 4) {
-      if (!formData.nationality || formData.kids.length === 0) {
-        toast({ title: "Please add at least one kid with nationality", variant: "destructive" });
+      if (formData.kids.length === 0) {
+        toast({ title: "Please add at least one kid", variant: "destructive" });
+        return;
+      }
+      // Validate ages are positive
+      const hasInvalidAge = formData.kids.some(kid => {
+        const age = parseInt(kid.age);
+        return isNaN(age) || age < 0 || age > 18;
+      });
+      if (hasInvalidAge) {
+        toast({ title: "Please enter valid ages (0-18) for all kids", variant: "destructive" });
         return;
       }
       // Generate theme options based on demographics
@@ -55,7 +63,6 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
         const { data, error } = await supabase.functions.invoke("generate-gift-recommendations", {
           body: { 
             action: "generate-themes",
-            nationality: formData.nationality,
             kids: formData.kids
           },
         });
@@ -241,33 +248,33 @@ export const GiftForm = ({ onComplete }: GiftFormProps) => {
               <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                 Tell us about the kids
               </h2>
-              <p className="text-muted-foreground">Add details for each kid attending</p>
-            </div>
-            <div>
-              <Label htmlFor="nationality" className="text-lg">Nationality</Label>
-              <Input
-                id="nationality"
-                type="text"
-                placeholder="e.g., American, Indian, British"
-                value={formData.nationality}
-                onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                className="mt-2 text-lg p-6 rounded-xl"
-              />
+              <p className="text-muted-foreground">Add details for each kid attending (ages 0-18)</p>
             </div>
             <div className="space-y-4">
               <Label className="text-lg">Kids Information</Label>
               {formData.kids.map((kid, index) => (
                 <div key={index} className="flex gap-3 items-end">
                   <div className="flex-1">
+                    <Label htmlFor={`age-${index}`} className="text-sm text-muted-foreground">Age (0-18)</Label>
                     <Input
+                      id={`age-${index}`}
                       type="number"
+                      min="0"
+                      max="18"
                       placeholder="Age"
                       value={kid.age}
-                      onChange={(e) => updateKid(index, "age", e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Prevent negative numbers
+                        if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 18)) {
+                          updateKid(index, "age", value);
+                        }
+                      }}
                       className="rounded-xl"
                     />
                   </div>
                   <div className="flex-1">
+                    <Label className="text-sm text-muted-foreground mb-2 block">Gender</Label>
                     <RadioGroup value={kid.gender} onValueChange={(v) => updateKid(index, "gender", v)}>
                       <div className="flex gap-4">
                         <div className="flex items-center space-x-2">
