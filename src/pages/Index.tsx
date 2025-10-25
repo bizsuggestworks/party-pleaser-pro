@@ -113,7 +113,7 @@ const Index = () => {
                 </div>
                 <div className="text-left">
                   <h1 className="text-6xl md:text-8xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent">
-                    Giftify
+                    Gifity
                   </h1>
                   <p className="text-lg text-gray-600 font-medium">Where Every Gift Tells a Story</p>
                 </div>
@@ -231,7 +231,7 @@ const Index = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h3 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">
-              Why Choose Giftify?
+              Why Choose Gifity?
             </h3>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
               We make return gift planning effortless, memorable, and absolutely delightful.

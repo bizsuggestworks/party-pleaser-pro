@@ -24,7 +24,7 @@ export const LoginScreen = ({ onClose }: LoginScreenProps) => {
     address: ""
   });
   
-  const { signInWithGoogle, signInWithInstagram } = useAuth();
+  const { signInWithGoogle, signInWithInstagram, signInDemo } = useAuth();
   const { toast } = useToast();
 
   const handleEmailAuth = async (e: React.FormEvent) => {
@@ -66,9 +66,10 @@ export const LoginScreen = ({ onClose }: LoginScreenProps) => {
         onClose();
       }
     } catch (error: any) {
+      console.error('Email auth error:', error);
       toast({
         title: "Authentication Error",
-        description: error.message,
+        description: error.message || "Please check your credentials and try again.",
         variant: "destructive",
       });
     } finally {
@@ -80,11 +81,13 @@ export const LoginScreen = ({ onClose }: LoginScreenProps) => {
     setLoading(true);
     try {
       await signInWithGoogle();
-      onClose();
+      // Don't close immediately for OAuth as it redirects
+      // The auth state change will handle the UI update
     } catch (error: any) {
+      console.error('Google sign-in error:', error);
       toast({
         title: "Google Sign-in Failed",
-        description: error.message || "Please try again.",
+        description: error.message || "Google OAuth is not configured. Please use email/password sign-in.",
         variant: "destructive",
       });
     } finally {
@@ -248,6 +251,27 @@ export const LoginScreen = ({ onClose }: LoginScreenProps) => {
               <Instagram className="w-4 h-4 mr-2" />
               Continue with Instagram (Coming Soon)
             </Button>
+            
+            {/* Demo Authentication for Testing */}
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800 font-medium mb-2">Demo Mode</p>
+              <Button
+                onClick={() => {
+                  signInDemo();
+                  toast({
+                    title: "Demo Login",
+                    description: "Logged in as demo user for testing purposes.",
+                  });
+                  onClose();
+                }}
+                variant="outline"
+                className="w-full text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+                disabled={loading}
+              >
+                <User className="w-4 h-4 mr-2" />
+                Demo Login (Testing)
+              </Button>
+            </div>
           </div>
           
           <div className="mt-4 text-center">
