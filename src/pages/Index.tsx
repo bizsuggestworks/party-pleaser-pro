@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { GiftForm } from "@/components/GiftForm";
 import { GiftResults } from "@/components/GiftResults";
-import { Gift, Sparkles, Heart } from "lucide-react";
+import { LoginScreen } from "@/components/LoginScreen";
+import { useAuth } from "@/contexts/AuthContext";
+import { Gift, Sparkles, Heart, User, LogOut, Settings } from "lucide-react";
 
 export interface GiftItem {
   title: string;
@@ -34,6 +36,8 @@ export interface RecommendationResponse {
 const Index = () => {
   const [showForm, setShowForm] = useState(false);
   const [results, setResults] = useState<RecommendationResponse | null>(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const { user, signOut, isAdmin } = useAuth();
 
   const handleFormComplete = (data: RecommendationResponse) => {
     setResults(data);
@@ -52,8 +56,40 @@ const Index = () => {
     return <GiftForm onComplete={handleFormComplete} />;
   }
 
+  if (showLogin) {
+    return <LoginScreen onClose={() => setShowLogin(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background">
+      {/* Header with Authentication */}
+      <div className="absolute top-4 right-4 z-10">
+        {user ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Welcome, {user.email}</span>
+            {isAdmin && (
+              <Button
+                onClick={() => window.location.href = '/admin'}
+                variant="outline"
+                size="sm"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Admin
+              </Button>
+            )}
+            <Button onClick={signOut} variant="outline" size="sm">
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
+        ) : (
+          <Button onClick={() => setShowLogin(true)} variant="outline">
+            <User className="w-4 h-4 mr-2" />
+            Sign In
+          </Button>
+        )}
+      </div>
+      
       <div className="container mx-auto px-4 py-16">
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-8">
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-1000">
@@ -63,11 +99,11 @@ const Index = () => {
             </div>
             
             <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-primary via-accent to-primary-glow bg-clip-text text-transparent pb-2">
-              Perfect Return Gifts
+              Party Pleaser Pro
             </h1>
             
             <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
-              AI-powered gift recommendations tailored to your event, budget, and theme
+              Perfect return gift recommendations for any event, budget, and theme
             </p>
           </div>
 

@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ExternalLink, ArrowLeft, ShoppingCart, Gift, ShoppingBag, Package } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ExternalLink, ArrowLeft, ShoppingCart, Gift, ShoppingBag, Package, List, CreditCard, User, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { PaymentForm } from "@/components/PaymentForm";
 import type { RecommendationResponse } from "@/pages/Index";
 
 interface GiftResultsProps {
@@ -16,13 +19,54 @@ interface GiftResultsProps {
 export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
   const [quantity, setQuantity] = useState(results.quantity || 1);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [personalization, setPersonalization] = useState({
+    customNames: [] as string[],
+    customMessage: "",
+    printNames: false,
+    specialInstructions: ""
+  });
   const { toast } = useToast();
 
   const totalCost = (results.pricePerBag || 0) * quantity;
 
-  const handleCheckout = () => {
-    setShowCheckout(true);
+  const handlePaymentSuccess = (orderId: string) => {
+    // Redirect to payment success page
+    window.location.href = `/payment-success?orderId=${orderId}`;
   };
+
+  const handleStartPayment = () => {
+    setShowPayment(true);
+  };
+
+  const handleCancelPayment = () => {
+    setShowPayment(false);
+  };
+
+  // Show payment form if user clicked to pay
+  if (showPayment) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background">
+        <div className="container mx-auto px-4 py-12">
+          <PaymentForm
+            totalAmount={totalCost}
+            quantity={quantity}
+            personalization={personalization}
+            giftSelections={{
+              eventType: "Birthday Party", // This would come from the form data
+              theme: results.bags[0]?.items[0]?.category || "General",
+              budget: "Within Budget",
+              bagSize: "Medium",
+              kids: [], // This would come from the form data
+              bags: results.bags
+            }}
+            onPaymentSuccess={handlePaymentSuccess}
+            onCancel={handleCancelPayment}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background">
@@ -50,12 +94,12 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
           </Button>
         </div>
 
-        {/* Pricing and Quantity Section */}
+        {/* Order Summary Section */}
         <Card className="mb-8 border-primary/20 bg-gradient-to-br from-primary/5 to-accent/5">
           <CardContent className="p-6">
             <div className="grid md:grid-cols-3 gap-6">
               <div>
-                <Label htmlFor="quantity" className="text-lg font-semibold">Number of Bags</Label>
+                <Label htmlFor="quantity" className="text-lg font-semibold">Number of Gift Bags</Label>
                 <Input
                   id="quantity"
                   type="number"
@@ -66,22 +110,96 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
                 />
               </div>
               <div className="flex flex-col justify-center">
-                <p className="text-sm text-muted-foreground">Price per bag</p>
-                <p className="text-3xl font-bold text-primary">${results.pricePerBag?.toFixed(2) || "0.00"}</p>
+                <p className="text-sm text-muted-foreground">Budget per bag</p>
+                <p className="text-3xl font-bold text-primary">Within Budget</p>
               </div>
               <div className="flex flex-col justify-center">
-                <p className="text-sm text-muted-foreground">Total Cost</p>
+                <p className="text-sm text-muted-foreground">Order Total</p>
                 <p className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  ${totalCost.toFixed(2)}
+                  Within Budget
                 </p>
               </div>
             </div>
-            <Button
-              onClick={handleCheckout}
+            
+            {/* Personalization Options */}
+            <div className="mt-8 space-y-6">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="printNames"
+                  checked={personalization.printNames}
+                  onCheckedChange={(checked) => 
+                    setPersonalization(prev => ({ ...prev, printNames: checked as boolean }))
+                  }
+                />
+                <Label htmlFor="printNames" className="text-lg font-semibold">
+                  <User className="w-5 h-5 inline mr-2" />
+                  Print custom names on items
+                </Label>
+              </div>
+              
+              {personalization.printNames && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="customNames" className="text-sm font-medium">
+                      Enter names (one per line):
+                    </Label>
+                    <Textarea
+                      id="customNames"
+                      placeholder="Enter names, one per line..."
+                      value={personalization.customNames.join('\n')}
+                      onChange={(e) => setPersonalization(prev => ({ 
+                        ...prev, 
+                        customNames: e.target.value.split('\n').filter(name => name.trim())
+                      }))}
+                      className="mt-2"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              <div>
+                <Label htmlFor="customMessage" className="text-sm font-medium">
+                  <MessageSquare className="w-4 h-4 inline mr-2" />
+                  Special message for the bags:
+                </Label>
+                <Textarea
+                  id="customMessage"
+                  placeholder="e.g., 'Thank you for celebrating with us!' or 'Happy Birthday!'"
+                  value={personalization.customMessage}
+                  onChange={(e) => setPersonalization(prev => ({ 
+                    ...prev, 
+                    customMessage: e.target.value 
+                  }))}
+                  className="mt-2"
+                  rows={2}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="specialInstructions" className="text-sm font-medium">
+                  Special instructions for gift preparation:
+                </Label>
+                <Textarea
+                  id="specialInstructions"
+                  placeholder="Any specific requirements, allergies, or preferences..."
+                  value={personalization.specialInstructions}
+                  onChange={(e) => setPersonalization(prev => ({ 
+                    ...prev, 
+                    specialInstructions: e.target.value 
+                  }))}
+                  className="mt-2"
+                  rows={2}
+                />
+              </div>
+            </div>
+            
+            <Button 
+              onClick={handleStartPayment}
               className="w-full mt-6 py-6 rounded-xl text-lg bg-gradient-to-r from-primary to-accent"
             >
-              <ShoppingCart className="mr-2 w-5 h-5" />
-              Proceed to Checkout
+              <CreditCard className="mr-2 w-5 h-5" />
+              Place Order & Pay
             </Button>
           </CardContent>
         </Card>
@@ -92,7 +210,7 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
             <ShoppingBag className="w-8 h-8 text-primary" />
             Complete Gift Bag Options
           </h2>
-          <p className="text-muted-foreground mb-6">Each bag includes all items shown below and stays within your ${results.pricePerBag.toFixed(2)} budget</p>
+          <p className="text-muted-foreground mb-6">Each bag includes all items shown below and stays within your budget</p>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {results.bags.map((bag, bagIndex) => (
@@ -120,11 +238,11 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
                     <Package className="w-8 h-8 text-primary flex-shrink-0" />
                   </div>
 
-                  {/* Bag Price */}
+                  {/* Bag Info */}
                   <div className="mb-4 p-3 bg-accent/10 rounded-xl">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Bag Cost:</span>
-                      <span className="text-lg font-bold text-accent">${bag.bagPrice.toFixed(2)}</span>
+                      <span className="text-sm font-medium">Gift Bag:</span>
+                      <span className="text-lg font-bold text-accent">Premium Quality</span>
                     </div>
                     <Button 
                       asChild
@@ -163,21 +281,18 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-start gap-2 mb-1">
                                 <h5 className="font-semibold text-sm leading-tight">{item.title}</h5>
-                                <span className="text-sm font-bold text-primary whitespace-nowrap">${item.price.toFixed(2)}</span>
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                                  Included
+                                </span>
                               </div>
                               <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{item.description}</p>
                               <div className="flex items-center justify-between">
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                                   {item.category}
                                 </span>
-                                <a 
-                                  href={item.buyLink} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-accent hover:underline flex items-center gap-1"
-                                >
-                                  Amazon <ExternalLink className="w-3 h-3" />
-                                </a>
+                                <span className="text-xs text-muted-foreground">
+                                  We'll source this for you
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -186,19 +301,19 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
                     </div>
                   </div>
 
-                  {/* Totals */}
+                  {/* Bag Summary */}
                   <div className="border-t border-border pt-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Items Total:</span>
-                      <span className="font-semibold">${bag.totalItemsCost.toFixed(2)}</span>
+                      <span className="text-muted-foreground">Items included:</span>
+                      <span className="font-semibold">{bag.items.length} quality items</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Bag Cost:</span>
-                      <span className="font-semibold">${bag.bagPrice.toFixed(2)}</span>
+                      <span className="text-muted-foreground">Gift bag:</span>
+                      <span className="font-semibold">Premium quality</span>
                     </div>
                     <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
-                      <span>Total per Bag:</span>
-                      <span className="text-primary">${bag.totalBagCost.toFixed(2)}</span>
+                      <span>Budget per bag:</span>
+                      <span className="text-primary">Within your budget</span>
                     </div>
                   </div>
                 </div>
@@ -235,25 +350,25 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
                         {bag.items.map((item, itemIndex) => (
                           <li key={itemIndex} className="flex justify-between text-sm">
                             <span className="text-muted-foreground">• {item.title}</span>
-                            <span className="font-medium">${item.price.toFixed(2)}</span>
+                            <span className="font-medium text-green-600">✓ Included</span>
                           </li>
                         ))}
                         <li className="flex justify-between text-sm pt-2 border-t">
                           <span className="text-muted-foreground">• {bag.bagTitle} (Bag)</span>
-                          <span className="font-medium">${bag.bagPrice.toFixed(2)}</span>
+                          <span className="font-medium text-green-600">✓ Included</span>
                         </li>
                       </ul>
                     </div>
 
                     <div className="flex justify-between items-center p-3 bg-primary/10 rounded-lg">
-                      <span className="font-semibold">Total per bag:</span>
-                      <span className="text-xl font-bold text-primary">${bag.totalBagCost.toFixed(2)}</span>
+                      <span className="font-semibold">Budget per bag:</span>
+                      <span className="text-xl font-bold text-primary">Within your budget</span>
                     </div>
 
                     {quantity > 1 && (
                       <div className="flex justify-between items-center mt-2 text-sm text-muted-foreground">
                         <span>× {quantity} bags</span>
-                        <span className="font-semibold">${(bag.totalBagCost * quantity).toFixed(2)}</span>
+                        <span className="font-semibold text-green-600">All within budget</span>
                       </div>
                     )}
                   </CardContent>
@@ -263,9 +378,9 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
               <Card className="bg-gradient-to-br from-primary/5 to-accent/5">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-center mb-4">
-                    <span className="text-lg font-semibold">Grand Total ({quantity} bags):</span>
+                    <span className="text-lg font-semibold">Order Summary ({quantity} bags):</span>
                     <span className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                      ${totalCost.toFixed(2)}
+                      Within Budget
                     </span>
                   </div>
                   <Button 
@@ -273,7 +388,7 @@ export const GiftResults = ({ results, onBack }: GiftResultsProps) => {
                     onClick={() => {
                       toast({
                         title: "Checkout Complete!",
-                        description: `Processing ${quantity} bag${quantity > 1 ? 's' : ''} for $${totalCost.toFixed(2)}`,
+                        description: `Processing ${quantity} bag${quantity > 1 ? 's' : ''} within your budget`,
                       });
                       setShowCheckout(false);
                     }}
