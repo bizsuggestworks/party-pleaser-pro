@@ -208,7 +208,7 @@ const Index = () => {
             </p>
           </div>
           
-          {/* Gift Exchange Gallery */}
+          {/* Gift Exchange Gallery - modernized cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
             {[
               { 
@@ -248,17 +248,36 @@ const Index = () => {
                 gradient: "from-purple-400 to-indigo-500"
               }
             ].map((item, index) => (
-              <div key={index} className="group relative overflow-hidden rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105">
-                <div className="aspect-[4/3] relative">
-                  <img 
-                    src={item.image} 
-                    alt={item.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                  <div className={`absolute inset-0 bg-gradient-to-t ${item.gradient} opacity-60 group-hover:opacity-70 transition-opacity duration-300`}></div>
-                  <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                    <h4 className="text-xl font-bold mb-2">{item.title}</h4>
-                    <p className="text-sm opacity-90">{item.description}</p>
+              <div key={index} className="group transform-gpu">
+                <div className="p-[2px] rounded-3xl bg-gradient-to-br from-white/20 to-white/5 hover:from-purple-500/40 hover:to-pink-500/40 transition-colors duration-500">
+                  <div className="relative overflow-hidden rounded-[22px] bg-white/60 dark:bg-black/40 backdrop-blur-sm shadow-xl hover:shadow-2xl transition-shadow duration-500">
+                    <div className="aspect-[4/3] relative">
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                      />
+                      <div className={`absolute inset-0 bg-gradient-to-t ${item.gradient} via-transparent to-transparent opacity-70 mix-blend-multiply`}></div>
+
+                      {/* Floating accent */}
+                      <div className="absolute top-4 right-4 text-white/90">
+                        <div className="px-3 py-1 text-xs font-medium rounded-full bg-white/20 backdrop-blur-md border border-white/30">
+                          Curated
+                        </div>
+                      </div>
+
+                      {/* Glass content */}
+                      <div className="absolute left-4 right-4 bottom-4">
+                        <div className="rounded-2xl bg-white/70 dark:bg-black/40 backdrop-blur-md border border-white/50 px-5 py-4 shadow-lg">
+                          <h4 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white mb-1">
+                            {item.title}
+                          </h4>
+                          <p className="text-xs md:text-sm text-gray-700/90 dark:text-gray-300/90 line-clamp-2">
+                            {item.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

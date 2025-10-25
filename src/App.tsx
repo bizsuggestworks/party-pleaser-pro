@@ -10,6 +10,7 @@ import { AdminDashboard } from "./pages/AdminDashboard";
 import { ChatBot } from "@/components/ChatBot";
 import { DevModeIndicator } from "@/components/DevModeIndicator";
 import NotFound from "./pages/NotFound";
+// Removed import of '@vercel/analytics/react' to fix module not found error
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
           </Routes>
           <ChatBot />
           <DevModeIndicator />
+          <Analytics />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
