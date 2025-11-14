@@ -10,28 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { loadEvents, saveEvents, saveEvent, type EviteEvent, type Guest } from "@/utils/eviteStorage";
 
 type GuestStatus = "pending" | "accepted" | "declined";
-
-interface Guest {
-  id: string;
-  name: string;
-  email: string;
-  status: GuestStatus;
-}
-
-interface EviteEvent {
-  id: string;
-  title: string;
-  hostName: string;
-  date: string; // ISO date
-  time: string; // HH:mm
-  location: string;
-  description: string;
-  template: string;
-  guests: Guest[];
-  createdAt: number;
-}
 
 const TEMPLATES = [
   { id: "classic", name: "Classic Confetti" },
@@ -40,28 +21,32 @@ const TEMPLATES = [
   { id: "minimal", name: "Minimal Modern" },
 ];
 
-const STORAGE_KEY = "partyify-evite-events";
-
-function loadEvents(): EviteEvent[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as EviteEvent[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveEvents(events: EviteEvent[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-}
-
 export default function Evite() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [tab, setTab] = useState("create");
 
-  const [events, setEvents] = useState<EviteEvent[]>(() => loadEvents());
-  const [activeEventId, setActiveEventId] = useState<string | null>(events[0]?.id ?? null);
+  const [events, setEvents] = useState<EviteEvent[]>([]);
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load events from Supabase on mount
+  useEffect(() => {
+    async function fetchEvents() {
+      try {
+        const loadedEvents = await loadEvents();
+        setEvents(loadedEvents);
+        if (loadedEvents.length > 0 && !activeEventId) {
+          setActiveEventId(loadedEvents[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to load events:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchEvents();
+  }, []);
 
   const [draft, setDraft] = useState<Omit<EviteEvent, "id" | "guests" | "createdAt">>({
     title: "",
@@ -81,10 +66,12 @@ export default function Evite() {
   );
 
   useEffect(() => {
-    saveEvents(events);
-  }, [events]);
+    if (!loading && events.length > 0) {
+      saveEvents(events);
+    }
+  }, [events, loading]);
 
-  const createEvent = () => {
+  const createEvent = async () => {
     if (!draft.title || !draft.date || !draft.time || !draft.location) {
       toast({
         title: "Missing details",
@@ -103,6 +90,8 @@ export default function Evite() {
     const next = [newEvent, ...events];
     setEvents(next);
     setActiveEventId(id);
+    // Save to Supabase
+    await saveEvent(newEvent);
     toast({ title: "Event created", description: "Share your invite link with guests." });
   };
 
@@ -113,7 +102,7 @@ export default function Evite() {
     toast({ title: "Event deleted" });
   };
 
-  const addGuest = () => {
+  const addGuest = async () => {
     if (!activeEvent) return;
     if (!newGuest.name || !newGuest.email) {
       toast({ title: "Enter guest name and email", variant: "destructive" });
@@ -128,22 +117,30 @@ export default function Evite() {
     };
     const next = events.map((e) => (e.id === activeEvent.id ? updated : e));
     setEvents(next);
+    // Save to Supabase
+    await saveEvent(updated);
     setNewGuest({ name: "", email: "" });
   };
 
-  const removeGuest = (guestId: string) => {
+  const removeGuest = async (guestId: string) => {
     if (!activeEvent) return;
     const updated: EviteEvent = { ...activeEvent, guests: activeEvent.guests.filter((g) => g.id !== guestId) };
-    setEvents(events.map((e) => (e.id === activeEvent.id ? updated : e)));
+    const next = events.map((e) => (e.id === activeEvent.id ? updated : e));
+    setEvents(next);
+    // Save to Supabase
+    await saveEvent(updated);
   };
 
-  const setGuestStatus = (guestId: string, status: GuestStatus) => {
+  const setGuestStatus = async (guestId: string, status: GuestStatus) => {
     if (!activeEvent) return;
     const updated: EviteEvent = {
       ...activeEvent,
       guests: activeEvent.guests.map((g) => (g.id === guestId ? { ...g, status } : g)),
     };
-    setEvents(events.map((e) => (e.id === activeEvent.id ? updated : e)));
+    const next = events.map((e) => (e.id === activeEvent.id ? updated : e));
+    setEvents(next);
+    // Save to Supabase
+    await saveEvent(updated);
   };
 
   const copyInviteLink = async () => {

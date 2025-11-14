@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,59 +8,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, MapPin, UserCheck } from "lucide-react";
+import { loadEvent, saveEvent, type EviteEvent, type Guest } from "@/utils/eviteStorage";
 
 type GuestStatus = "pending" | "accepted" | "declined";
-
-interface Guest {
-  id: string;
-  name: string;
-  email: string;
-  status: GuestStatus;
-}
-
-interface EviteEvent {
-  id: string;
-  title: string;
-  hostName: string;
-  date: string;
-  time: string;
-  location: string;
-  description: string;
-  template: string;
-  guests: Guest[];
-  createdAt: number;
-}
-
-const STORAGE_KEY = "partyify-evite-events";
-
-function loadEvent(id: string): EviteEvent | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const list = raw ? (JSON.parse(raw) as EviteEvent[]) : [];
-    return list.find((e) => e.id === id) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function saveEvent(updated: EviteEvent) {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const list = raw ? (JSON.parse(raw) as EviteEvent[]) : [];
-    const next = list.map((e) => (e.id === updated.id ? updated : e));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // ignore
-  }
-}
 
 export default function EviteInvite() {
   const { eventId } = useParams();
   const { toast } = useToast();
+  const [event, setEvent] = useState<EviteEvent | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [event, setEvent] = useState<EviteEvent | null>(() =>
-    eventId ? loadEvent(eventId) : null
-  );
+  useEffect(() => {
+    async function fetchEvent() {
+      if (!eventId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const loadedEvent = await loadEvent(eventId);
+        setEvent(loadedEvent);
+      } catch (error) {
+        console.error("Failed to load event:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchEvent();
+  }, [eventId]);
 
   const [form, setForm] = useState({ name: "", email: "", response: "accepted" as GuestStatus, note: "" });
 
@@ -78,7 +52,7 @@ export default function EviteInvite() {
     }
   }, [event?.template]);
 
-  const submitRSVP = () => {
+  const submitRSVP = async () => {
     if (!event) return;
     if (!form.name || !form.email) {
       toast({ title: "Enter your name and email", variant: "destructive" });
@@ -101,17 +75,31 @@ export default function EviteInvite() {
       };
     }
     setEvent(updated);
-    saveEvent(updated);
+    await saveEvent(updated);
     toast({
       title: "RSVP received",
       description: `Thanks! Your response is ${form.response}.`,
     });
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading invitation...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!event) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">This invite link is invalid or the event was removed.</p>
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">This invite link is invalid or the event was removed.</p>
+          <p className="text-sm text-muted-foreground">Please contact the event host for a new invitation.</p>
+        </div>
       </div>
     );
   }
