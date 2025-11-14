@@ -5,7 +5,7 @@ import { GiftForm } from "@/components/GiftForm";
 import { GiftResults } from "@/components/GiftResults";
 import { LoginScreen } from "@/components/LoginScreen";
 import { useAuth } from "@/contexts/AuthContext";
-import { Gift, Sparkles, Heart, User, LogOut, Settings, Star, Users, Award, Zap, ArrowRight, Play, CheckCircle } from "lucide-react";
+import { Gift, Sparkles, Heart, User, LogOut, Settings, Star, Users, Award, Zap, ArrowRight, Play, CheckCircle, Calendar, Share2, Mail, ClipboardCheck } from "lucide-react";
 
 export interface GiftItem {
   title: string;
@@ -154,19 +154,19 @@ const Index = () => {
                 </div>
                  <div className="text-left">
                    <h1 className="text-6xl md:text-8xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent">
-                     Giftify
+                     Party67
                    </h1>
-                   <p className="text-lg text-gray-600 font-medium">Where Every Gift Tells a Story</p>
+                   <p className="text-lg text-gray-600 font-medium">Plan, Invite, and Celebrate — all in one place</p>
                  </div>
               </div>
               
               <h2 className="text-3xl md:text-5xl font-bold text-gray-800 max-w-4xl mx-auto leading-tight">
                 Create Magical Moments with 
-                <span className="bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent"> Perfect Return Gifts</span>
+                <span className="bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent"> Perfect Return Gifts</span> & E‑Vites
               </h2>
               
               <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-                From birthday parties to weddings, we curate the perfect return gifts that make every guest feel special. 
+                From birthday parties to weddings, Party67 helps you curate the perfect return gifts and send beautiful digital invitations in minutes. 
                 <span className="font-semibold text-purple-600"> No more guesswork, just pure joy!</span>
               </p>
             </div>
@@ -186,10 +186,11 @@ const Index = () => {
               <Button 
                 variant="outline"
                 size="lg"
+                onClick={() => window.location.href = '/evite'}
                 className="text-xl px-12 py-6 rounded-full border-2 border-purple-300 hover:bg-purple-50 transition-all duration-300"
               >
-                <Play className="mr-3 w-6 h-6" />
-                Watch Demo
+                <Calendar className="mr-3 w-6 h-6" />
+                Create an E‑Vite
               </Button>
             </div>
           </div>
@@ -291,7 +292,7 @@ const Index = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h3 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">
-              Why Choose Gifity?
+              Why Choose Party67?
             </h3>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
               We make return gift planning effortless, memorable, and absolutely delightful.
@@ -324,6 +325,56 @@ const Index = () => {
                 <p className="text-gray-600 leading-relaxed">{feature.description}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Party67 E‑Vite Section */}
+      <div className="py-20 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h3 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">
+              Introduci‍ng Party67 E‑Vite
+            </h3>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Design stunning invitations, manage guest lists, and track RSVPs — all from your browser.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+            <div className="p-8 rounded-3xl border bg-white shadow-lg hover:shadow-xl transition">
+              <div className="flex items-center gap-3 mb-4">
+                <Share2 className="w-6 h-6 text-purple-600" />
+                <h4 className="text-2xl font-bold">Beautiful Templates</h4>
+              </div>
+              <p className="text-gray-600">Choose from curated designs and personalize colors, photos, and messages.</p>
+            </div>
+            <div className="p-8 rounded-3xl border bg-white shadow-lg hover:shadow-xl transition">
+              <div className="flex items-center gap-3 mb-4">
+                <Mail className="w-6 h-6 text-pink-600" />
+                <h4 className="text-2xl font-bold">Guest List & Email</h4>
+              </div>
+              <p className="text-gray-600">Import guests, send invites, and schedule reminders with one click.</p>
+            </div>
+            <div className="p-8 rounded-3xl border bg-white shadow-lg hover:shadow-xl transition">
+              <div className="flex items-center gap-3 mb-4">
+                <ClipboardCheck className="w-6 h-6 text-orange-600" />
+                <h4 className="text-2xl font-bold">Real‑time RSVPs</h4>
+              </div>
+              <p className="text-gray-600">Track who’s in, who’s out, and see headcount at a glance.</p>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <Button 
+              onClick={() => (window.location.href = '/evite')}
+              size="lg"
+              className="text-xl px-12 py-6 rounded-full shadow-2xl hover:scale-105 transition-all duration-300 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white"
+            >
+              <Calendar className="mr-3 w-6 h-6" />
+              Try Party67 E‑Vite
+              <ArrowRight className="ml-3 w-6 h-6" />
+            </Button>
           </div>
         </div>
       </div>

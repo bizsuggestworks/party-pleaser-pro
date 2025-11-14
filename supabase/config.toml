@@ -2,3 +2,6 @@ project_id = "deymtgmazorjfpinfisx"
 
 [functions.generate-gift-recommendations]
 verify_jwt = false
+
+[functions.send-evites]
+verify_jwt = false

@@ -7,6 +7,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import { PaymentSuccess } from "./pages/PaymentSuccess";
 import { AdminDashboard } from "./pages/AdminDashboard";
+import Evite from "./pages/Evite";
+import EviteInvite from "./pages/EviteInvite";
 import { ChatBot } from "@/components/ChatBot";
 import { DevModeIndicator } from "@/components/DevModeIndicator";
 import NotFound from "./pages/NotFound";
@@ -31,6 +33,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/payment-success" element={<PaymentSuccess />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/evite" element={<Evite />} />
+            <Route path="/evite/:eventId" element={<EviteInvite />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

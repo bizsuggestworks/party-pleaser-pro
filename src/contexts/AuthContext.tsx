@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         const { user, session, timestamp } = JSON.parse(demoSession);
         // Check if demo session is still valid (24 hours) AND has correct email
-        if (Date.now() - timestamp < 24 * 60 * 60 * 1000 && user.email === 'demo@giftify.com') {
+        if (Date.now() - timestamp < 24 * 60 * 60 * 1000 && user.email === 'demo@party67.com') {
           setUser(user);
           setSession(session);
           checkAdminStatus(user);
@@ -104,8 +104,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const adminEmails = [
       'admin@partypresentpro.com', 
       'venne@example.com',
-      'demo@giftify.com', // Demo user is admin for testing
-      'admin@giftify.com'
+      'demo@party67.com', // Demo user is admin for testing
+      'admin@party67.com'
     ];
     const isAdminUser = adminEmails.includes(user.email || '');
     setIsAdmin(isAdminUser);
@@ -157,7 +157,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Create a demo user object
     const demoUser: User = {
       id: 'demo-user-123',
-      email: 'demo@giftify.com',
+      email: 'demo@party67.com',
       user_metadata: { 
         full_name: 'Demo User',
         avatar_url: null
@@ -217,8 +217,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const adminEmails = [
       'admin@partypresentpro.com', 
       'venne@example.com',
-      'demo@giftify.com', // Demo user is admin for testing
-      'admin@giftify.com'
+      'demo@party67.com', // Demo user is admin for testing
+      'admin@party67.com'
     ];
     const isAdminUser = adminEmails.includes(demoUser.email);
     setIsAdmin(isAdminUser);
