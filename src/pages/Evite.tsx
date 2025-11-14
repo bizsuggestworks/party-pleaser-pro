@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { loadEvents, saveEvents, saveEvent, type EviteEvent, type Guest } from "@/utils/eviteStorage";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 type GuestStatus = "pending" | "accepted" | "declined";
 
@@ -312,11 +313,12 @@ export default function Evite() {
                       </div>
                     </div>
                     <div>
-                      <Label>Location</Label>
-                      <Input
+                      <AddressAutocomplete
+                        label="Location"
                         value={draft.location}
-                        onChange={(e) => setDraft({ ...draft, location: e.target.value })}
-                        placeholder="123 Party Lane, Springfield"
+                        onChange={(address) => setDraft({ ...draft, location: address })}
+                        placeholder="Start typing an address (e.g., 10731...)"
+                        required
                       />
                     </div>
                     <div>
