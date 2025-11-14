@@ -9,6 +9,7 @@ export interface Guest {
   id: string;
   name: string;
   email: string;
+  phone?: string; // Phone number for SMS
   status: "pending" | "accepted" | "declined";
   // RSVP details (only if accepted)
   foodPreference?: "veg" | "non-veg" | "both";

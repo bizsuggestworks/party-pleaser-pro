@@ -13,7 +13,16 @@ interface Guest {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   status: "pending" | "accepted" | "declined";
+  // RSVP details (only if accepted)
+  foodPreference?: "veg" | "non-veg" | "both";
+  numberOfAttendees?: number;
+  numberOfAdults?: number;
+  numberOfKids?: number;
+  kids?: Array<{ name: string; age: number }>;
+  dietaryPreferences?: string;
+  note?: string;
 }
 
 interface EviteEvent {
@@ -172,6 +181,73 @@ async function sendSmtpEmail(to: string, subject: string, html: string) {
   }
 }
 
+async function sendSMS(to: string, message: string) {
+  // Try Twilio first (most common)
+  const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+  const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+  const twilioFrom = Deno.env.get("TWILIO_PHONE_NUMBER");
+
+  if (twilioAccountSid && twilioAuthToken && twilioFrom) {
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
+    const auth = btoa(`${twilioAccountSid}:${twilioAuthToken}`);
+
+    const response = await fetch(twilioUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        From: twilioFrom,
+        To: to,
+        Body: message,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Twilio SMS error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    console.log(`SMS sent via Twilio. SID: ${data.sid}`);
+    return;
+  }
+
+  // Try Brevo SMS (if using Brevo)
+  const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+  if (brevoApiKey) {
+    const response = await fetch("https://api.brevo.com/v3/transactionalSMS/sms", {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "api-key": brevoApiKey,
+      },
+      body: JSON.stringify({
+        sender: Deno.env.get("SMS_SENDER_NAME") || "Party67",
+        recipient: to,
+        content: message,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Brevo SMS error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    console.log(`SMS sent via Brevo. Message ID: ${data.messageId || "N/A"}`);
+    return;
+  }
+
+  throw new Error("SMS not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER or BREVO_API_KEY");
+}
+
+function buildSMSMessage(event: EviteEvent, inviteUrl: string): string {
+  return `You're invited to ${event.title}!\n\nDate: ${event.date}\nTime: ${event.time}\nLocation: ${event.location}\n\nRSVP: ${inviteUrl}\n\nHosted by ${event.hostName || "your host"}`;
+}
+
 console.info("send-evites function ready");
 
 Deno.serve(async (req) => {
@@ -200,19 +276,35 @@ Deno.serve(async (req) => {
 
     const inviteUrl = `${origin.replace(/\/$/, "")}/evite/${event.id}`;
 
-    const results: { to: string; ok: boolean; error?: string; details?: string }[] = [];
+    const results: { to: string; ok: boolean; error?: string; details?: string; type?: string }[] = [];
     for (const g of event.guests) {
+      // Send email
       try {
         console.log(`Processing email for guest: ${g.name} (${g.email})`);
         const subject = `You're invited: ${event.title}`;
         const html = buildEmailHtml(event, inviteUrl);
         await sendSmtpEmail(g.email, subject, html);
         console.log(`✓ Successfully sent email to ${g.email}`);
-        results.push({ to: g.email, ok: true, details: "Email queued for delivery" });
+        results.push({ to: g.email, ok: true, details: "Email queued for delivery", type: "email" });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error(`✗ Failed sending to ${g.email}:`, errorMsg);
-        results.push({ to: g.email, ok: false, error: errorMsg });
+        console.error(`✗ Failed sending email to ${g.email}:`, errorMsg);
+        results.push({ to: g.email, ok: false, error: errorMsg, type: "email" });
+      }
+
+      // Send SMS if phone number is provided
+      if (g.phone) {
+        try {
+          console.log(`Processing SMS for guest: ${g.name} (${g.phone})`);
+          const smsMessage = buildSMSMessage(event, inviteUrl);
+          await sendSMS(g.phone, smsMessage);
+          console.log(`✓ Successfully sent SMS to ${g.phone}`);
+          results.push({ to: g.phone, ok: true, details: "SMS sent", type: "sms" });
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          console.error(`✗ Failed sending SMS to ${g.phone}:`, errorMsg);
+          results.push({ to: g.phone, ok: false, error: errorMsg, type: "sms" });
+        }
       }
     }
 
@@ -230,6 +322,7 @@ Deno.serve(async (req) => {
         failed,
         inviteUrl,
         total: results.length,
+        results, // Include all results (email + SMS) for detailed tracking
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

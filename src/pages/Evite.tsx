@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette } from "lucide-react";
+import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { loadEvents, saveEvents, saveEvent, type EviteEvent, type Guest } from "@/utils/eviteStorage";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
@@ -59,7 +59,7 @@ export default function Evite() {
     template: TEMPLATES[0].id,
   });
 
-  const [newGuest, setNewGuest] = useState({ name: "", email: "" });
+  const [newGuest, setNewGuest] = useState({ name: "", email: "", phone: "" });
 
   const activeEvent = useMemo(
     () => events.find((e) => e.id === activeEventId) ?? null,
@@ -113,14 +113,20 @@ export default function Evite() {
       ...activeEvent,
       guests: [
         ...activeEvent.guests,
-        { id: String(Date.now()), name: newGuest.name, email: newGuest.email, status: "pending" },
+        { 
+          id: String(Date.now()), 
+          name: newGuest.name, 
+          email: newGuest.email, 
+          phone: newGuest.phone || undefined,
+          status: "pending" 
+        },
       ],
     };
     const next = events.map((e) => (e.id === activeEvent.id ? updated : e));
     setEvents(next);
     // Save to Supabase
     await saveEvent(updated);
-    setNewGuest({ name: "", email: "" });
+    setNewGuest({ name: "", email: "", phone: "" });
   };
 
   const removeGuest = async (guestId: string) => {
@@ -175,22 +181,46 @@ export default function Evite() {
       const failed = data?.failed || [];
       const failedCount = failed.length;
       
+      // Separate email and SMS results
+      const allResults = data?.results || [];
+      const emailResults = allResults.filter((f: any) => !f.type || f.type === "email");
+      const smsResults = allResults.filter((f: any) => f.type === "sms");
+      const emailSent = emailResults.filter((r: any) => r.ok).length;
+      const emailFailed = emailResults.filter((r: any) => !r.ok).length;
+      const smsSent = smsResults.filter((r: any) => r.ok).length;
+      const smsFailed = smsResults.filter((r: any) => !r.ok).length;
+      
       // Extract error messages for better debugging
       const errorMessages = failed.map((f: any) => f.error || "Unknown error").join("; ");
       
+      let description = "";
+      if (emailSent > 0 && smsSent > 0) {
+        description = `${emailSent} email${emailSent === 1 ? "" : "s"} and ${smsSent} SMS sent.`;
+      } else if (emailSent > 0) {
+        description = `${emailSent} email${emailSent === 1 ? "" : "s"} sent.`;
+      } else if (smsSent > 0) {
+        description = `${smsSent} SMS sent.`;
+      }
+      
       if (failedCount > 0) {
-        console.error("Failed email details:", failed);
+        console.error("Failed details:", failed);
+        const failedDetails = [];
+        if (emailFailed > 0) failedDetails.push(`${emailFailed} email${emailFailed === 1 ? "" : "s"}`);
+        if (smsFailed > 0) failedDetails.push(`${smsFailed} SMS`);
+        
         toast({
           title: sent > 0 ? `Sent ${sent} invite${sent === 1 ? "" : "s"}, ${failedCount} failed` : `Failed to send ${failedCount} invite${failedCount === 1 ? "" : "s"}`,
-          description: errorMessages.length > 100 
+          description: failedDetails.length > 0 
+            ? `${description} ${failedDetails.join(" and ")} failed. Check configuration.`
+            : errorMessages.length > 100 
             ? `${errorMessages.substring(0, 100)}... Check console for details.` 
-            : errorMessages || "Check SMTP configuration in Supabase Dashboard → Functions → Secrets.",
+            : errorMessages || "Check SMTP/SMS configuration in Supabase Dashboard → Functions → Secrets.",
           variant: failedCount > 0 && sent === 0 ? "destructive" : "default",
         });
       } else {
         toast({
           title: `Sent ${sent} invite${sent === 1 ? "" : "s"}`,
-          description: "Emails dispatched via SMTP.",
+          description: description || "Invites dispatched.",
         });
       }
     } catch (e: any) {
@@ -376,22 +406,31 @@ export default function Evite() {
                       <CardTitle>Guest List</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Guest name"
-                          value={newGuest.name}
-                          onChange={(e) => setNewGuest((g) => ({ ...g, name: e.target.value }))}
-                        />
-                        <Input
-                          placeholder="Email address"
-                          type="email"
-                          value={newGuest.email}
-                          onChange={(e) => setNewGuest((g) => ({ ...g, email: e.target.value }))}
-                        />
-                        <Button onClick={addGuest}>
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add
-                        </Button>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Guest name"
+                            value={newGuest.name}
+                            onChange={(e) => setNewGuest((g) => ({ ...g, name: e.target.value }))}
+                          />
+                          <Input
+                            placeholder="Email address"
+                            type="email"
+                            value={newGuest.email}
+                            onChange={(e) => setNewGuest((g) => ({ ...g, email: e.target.value }))}
+                          />
+                          <Input
+                            placeholder="Phone (optional, for SMS)"
+                            type="tel"
+                            value={newGuest.phone}
+                            onChange={(e) => setNewGuest((g) => ({ ...g, phone: e.target.value }))}
+                          />
+                          <Button onClick={addGuest}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Add phone number to send SMS invites</p>
                       </div>
 
                       <Table>
@@ -399,6 +438,7 @@ export default function Evite() {
                           <TableRow>
                             <TableHead>Name</TableHead>
                             <TableHead>Email</TableHead>
+                            <TableHead>Phone</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="w-[100px]">Actions</TableHead>
                           </TableRow>
@@ -408,6 +448,7 @@ export default function Evite() {
                             <TableRow key={g.id}>
                               <TableCell>{g.name}</TableCell>
                               <TableCell className="truncate">{g.email}</TableCell>
+                              <TableCell className="truncate">{g.phone || "-"}</TableCell>
                               <TableCell className="capitalize">{g.status}</TableCell>
                               <TableCell>
                                 <div className="flex gap-1">
@@ -429,7 +470,7 @@ export default function Evite() {
                           ))}
                           {activeEvent.guests.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={4} className="text-center text-muted-foreground">
+                              <TableCell colSpan={5} className="text-center text-muted-foreground">
                                 No guests yet. Add your first guest above.
                               </TableCell>
                             </TableRow>
@@ -470,25 +511,115 @@ export default function Evite() {
                     <CardContent className="p-6 text-muted-foreground">Create an event first</CardContent>
                   </Card>
                 ) : (
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Accepted</CardTitle>
-                      </CardHeader>
-                      <CardContent className="text-4xl font-bold text-green-600">{accepted}</CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Declined</CardTitle>
-                      </CardHeader>
-                      <CardContent className="text-4xl font-bold text-red-600">{declined}</CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Pending</CardTitle>
-                      </CardHeader>
-                      <CardContent className="text-4xl font-bold text-yellow-600">{pending}</CardContent>
-                    </Card>
+                  <div className="space-y-4">
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Accepted</CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-4xl font-bold text-green-600">{accepted}</CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Declined</CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-4xl font-bold text-red-600">{declined}</CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Pending</CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-4xl font-bold text-yellow-600">{pending}</CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Accepted Guests Details */}
+                    {accepted > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Accepted RSVPs - Details</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {activeEvent.guests
+                              .filter((g) => g.status === "accepted")
+                              .map((guest) => (
+                                <div key={guest.id} className="border rounded-lg p-4 space-y-3">
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <h4 className="font-semibold text-lg">{guest.name}</h4>
+                                      <p className="text-sm text-muted-foreground">{guest.email}</p>
+                                      {guest.phone && (
+                                        <p className="text-sm text-muted-foreground">📱 {guest.phone}</p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {guest.numberOfAttendees && (
+                                    <div className="grid md:grid-cols-2 gap-4 pt-2 border-t">
+                                      <div>
+                                        <p className="text-sm font-medium text-muted-foreground">Food Preference</p>
+                                        <p className="text-base capitalize">
+                                          {guest.foodPreference === "veg"
+                                            ? "Vegetarian"
+                                            : guest.foodPreference === "non-veg"
+                                            ? "Non-Vegetarian"
+                                            : "Both"}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-medium text-muted-foreground">Total Attendees</p>
+                                        <p className="text-base">
+                                          {guest.numberOfAttendees} {guest.numberOfAttendees === 1 ? "person" : "people"}
+                                        </p>
+                                      </div>
+                                      {guest.numberOfAdults && (
+                                        <div>
+                                          <p className="text-sm font-medium text-muted-foreground">Adults</p>
+                                          <p className="text-base">{guest.numberOfAdults}</p>
+                                        </div>
+                                      )}
+                                      {guest.numberOfKids !== undefined && guest.numberOfKids > 0 && (
+                                        <div>
+                                          <p className="text-sm font-medium text-muted-foreground">Kids</p>
+                                          <p className="text-base">{guest.numberOfKids}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {guest.kids && guest.kids.length > 0 && (
+                                    <div className="pt-2 border-t">
+                                      <p className="text-sm font-medium text-muted-foreground mb-2">Kids Details</p>
+                                      <div className="space-y-1">
+                                        {guest.kids.map((kid, idx) => (
+                                          <p key={idx} className="text-sm">
+                                            • {kid.name} ({kid.age} {kid.age === 1 ? "year" : "years"} old)
+                                          </p>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {guest.dietaryPreferences && (
+                                    <div className="pt-2 border-t">
+                                      <p className="text-sm font-medium text-muted-foreground">Dietary Preferences</p>
+                                      <p className="text-sm">{guest.dietaryPreferences}</p>
+                                    </div>
+                                  )}
+
+                                  {guest.note && (
+                                    <div className="pt-2 border-t">
+                                      <p className="text-sm font-medium text-muted-foreground">Note</p>
+                                      <p className="text-sm">{guest.note}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 )}
               </TabsContent>
@@ -521,7 +652,17 @@ export default function Evite() {
                           Preview Public Invite
                         </Button>
                       </div>
-                      <p className="text-sm text-muted-foreground">Uses SMTP settings from your environment.</p>
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          Sends emails via SMTP. Guests with phone numbers will also receive SMS.
+                        </p>
+                        {activeEvent.guests.filter(g => g.phone).length > 0 && (
+                          <div className="flex items-center gap-2 text-sm text-blue-600">
+                            <MessageSquare className="w-4 h-4" />
+                            <span>{activeEvent.guests.filter(g => g.phone).length} guest{activeEvent.guests.filter(g => g.phone).length === 1 ? "" : "s"} will receive SMS</span>
+                          </div>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 )}
