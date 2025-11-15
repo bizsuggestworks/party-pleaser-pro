@@ -182,14 +182,33 @@ async function sendSmtpEmail(to: string, subject: string, html: string) {
 }
 
 async function sendSMS(to: string, message: string) {
+  // Normalize phone number (remove spaces, ensure + prefix)
+  const normalizedTo = to.replace(/\s+/g, "").replace(/^\+?/, "+");
+  console.log(`[SMS] Sending SMS to: ${normalizedTo}`);
+
   // Try Twilio first (most common)
   const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   const twilioFrom = Deno.env.get("TWILIO_PHONE_NUMBER");
 
+  console.log(`[SMS] Twilio config check:`, {
+    hasAccountSid: !!twilioAccountSid,
+    hasAuthToken: !!twilioAuthToken,
+    hasPhoneNumber: !!twilioFrom,
+    phoneNumber: twilioFrom ? `${twilioFrom.substring(0, 4)}...` : "not set",
+  });
+
   if (twilioAccountSid && twilioAuthToken && twilioFrom) {
+    // Normalize from number too
+    const normalizedFrom = twilioFrom.replace(/\s+/g, "").replace(/^\+?/, "+");
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
     const auth = btoa(`${twilioAccountSid}:${twilioAuthToken}`);
+
+    console.log(`[SMS] Calling Twilio API:`, {
+      from: normalizedFrom,
+      to: normalizedTo,
+      messageLength: message.length,
+    });
 
     const response = await fetch(twilioUrl, {
       method: "POST",
@@ -198,19 +217,29 @@ async function sendSMS(to: string, message: string) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        From: twilioFrom,
-        To: to,
+        From: normalizedFrom,
+        To: normalizedTo,
         Body: message,
       }),
     });
 
+    const responseText = await response.text();
+    console.log(`[SMS] Twilio response status: ${response.status}`);
+    console.log(`[SMS] Twilio response:`, responseText);
+
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Twilio SMS error: ${response.status} - ${error}`);
+      let errorDetails;
+      try {
+        errorDetails = JSON.parse(responseText);
+      } catch {
+        errorDetails = responseText;
+      }
+      console.error(`[SMS] Twilio error:`, errorDetails);
+      throw new Error(`Twilio SMS error: ${response.status} - ${JSON.stringify(errorDetails)}`);
     }
 
-    const data = await response.json();
-    console.log(`SMS sent via Twilio. SID: ${data.sid}`);
+    const data = JSON.parse(responseText);
+    console.log(`[SMS] ✓ SMS sent via Twilio. SID: ${data.sid}, Status: ${data.status}`);
     return;
   }
 
@@ -295,16 +324,20 @@ Deno.serve(async (req) => {
       // Send SMS if phone number is provided
       if (g.phone) {
         try {
-          console.log(`Processing SMS for guest: ${g.name} (${g.phone})`);
+          console.log(`[send-evites] Processing SMS for guest: ${g.name} (${g.phone})`);
           const smsMessage = buildSMSMessage(event, inviteUrl);
+          console.log(`[send-evites] SMS message preview:`, smsMessage.substring(0, 100) + "...");
           await sendSMS(g.phone, smsMessage);
-          console.log(`✓ Successfully sent SMS to ${g.phone}`);
+          console.log(`[send-evites] ✓ Successfully sent SMS to ${g.phone}`);
           results.push({ to: g.phone, ok: true, details: "SMS sent", type: "sms" });
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
-          console.error(`✗ Failed sending SMS to ${g.phone}:`, errorMsg);
+          console.error(`[send-evites] ✗ Failed sending SMS to ${g.phone}:`, errorMsg);
+          console.error(`[send-evites] Error details:`, err);
           results.push({ to: g.phone, ok: false, error: errorMsg, type: "sms" });
         }
+      } else {
+        console.log(`[send-evites] Guest ${g.name} has no phone number, skipping SMS`);
       }
     }
 
