@@ -194,7 +194,13 @@ export default function EviteInvite() {
       <div className="container mx-auto px-4 py-10 max-w-3xl">
         {/* Invitation card */}
         <Card className="overflow-hidden">
-          <div className={`h-40 bg-gradient-to-r ${headerGradient}`} />
+          {event.useCustomImages && event.customImages && event.customImages.length > 0 ? (
+            <div className="h-40 w-full overflow-hidden">
+              <img src={event.customImages[0]} className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className={`h-40 bg-gradient-to-r ${headerGradient}`} />
+          )}
           <CardHeader className="text-center">
             <CardTitle className="text-3xl md:text-4xl">{event.title}</CardTitle>
           </CardHeader>

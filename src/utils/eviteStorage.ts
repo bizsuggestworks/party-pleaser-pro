@@ -31,6 +31,10 @@ export interface EviteEvent {
   description: string;
   template: string;
   guests: Guest[];
+  // Optional customization
+  useCustomImages?: boolean;
+  customStyle?: "classic" | "elegant" | "kids" | "minimal";
+  customImages?: string[]; // public URLs
   createdAt: number;
 }
 
@@ -66,6 +70,9 @@ export async function loadEvent(id: string): Promise<EviteEvent | null> {
         description: data.description || "",
         template: data.template || "classic",
         guests: (data.guests as Guest[]) || [],
+        useCustomImages: data.use_custom_images ?? false,
+        customStyle: (data.custom_style as any) ?? undefined,
+        customImages: (data.custom_images as string[]) ?? [],
         createdAt: new Date(data.created_at).getTime(),
       } as EviteEvent;
     } else {
@@ -115,6 +122,9 @@ export async function loadEvents(): Promise<EviteEvent[]> {
         description: e.description || "",
         template: e.template || "classic",
         guests: (e.guests as Guest[]) || [],
+        useCustomImages: e.use_custom_images ?? false,
+        customStyle: (e.custom_style as any) ?? undefined,
+        customImages: (e.custom_images as string[]) ?? [],
         createdAt: new Date(e.created_at).getTime(),
       })) as EviteEvent[];
     }
@@ -149,6 +159,9 @@ export async function saveEvent(event: EviteEvent): Promise<void> {
         description: event.description || "",
         template: event.template,
         guests: event.guests || [],
+        use_custom_images: event.useCustomImages ?? false,
+        custom_style: event.customStyle ?? null,
+        custom_images: event.customImages ?? [],
         created_at: new Date(event.createdAt).toISOString(),
         updated_at: new Date().toISOString(),
       }, {

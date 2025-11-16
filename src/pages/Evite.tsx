@@ -59,6 +59,12 @@ export default function Evite() {
     template: TEMPLATES[0].id,
   });
 
+  // Customization state (optional photo-based invite)
+  const [customizeEnabled, setCustomizeEnabled] = useState(false);
+  const [customStyle, setCustomStyle] = useState<"classic" | "elegant" | "kids" | "minimal">("classic");
+  const [customFiles, setCustomFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
   const [newGuest, setNewGuest] = useState({ name: "", email: "", phone: "" });
 
   const activeEvent = useMemo(
@@ -86,13 +92,46 @@ export default function Evite() {
       id,
       ...draft,
       guests: [],
+      useCustomImages: customizeEnabled,
+      customStyle: customizeEnabled ? customStyle : undefined,
+      customImages: [],
       createdAt: Date.now(),
     };
     const next = [newEvent, ...events];
     setEvents(next);
     setActiveEventId(id);
     // Save to Supabase
-    await saveEvent(newEvent);
+    try {
+      // If customization enabled and files selected, upload and update event
+      if (customizeEnabled && customFiles.length > 0) {
+        setIsUploading(true);
+        const uploadedUrls: string[] = [];
+        for (const [index, file] of customFiles.entries()) {
+          const path = `evite-uploads/${id}/${Date.now()}_${index}_${file.name}`;
+          const { data: up, error: upErr } = await (supabase as any).storage.from("evite-uploads").upload(path, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
+          if (upErr) {
+            console.error("Upload error:", upErr);
+            toast({ title: "Upload failed", description: upErr.message, variant: "destructive" });
+            continue;
+          }
+          const { data: pub } = (supabase as any).storage.from("evite-uploads").getPublicUrl(up.path);
+          if (pub?.publicUrl) {
+            uploadedUrls.push(pub.publicUrl);
+          }
+        }
+        const updatedEvent: EviteEvent = { ...newEvent, customImages: uploadedUrls };
+        await saveEvent(updatedEvent);
+        // Update local state with images
+        setEvents((prev) => prev.map((e) => (e.id === id ? updatedEvent : e)));
+      } else {
+        await saveEvent(newEvent);
+      }
+    } finally {
+      setIsUploading(false);
+    }
     toast({ title: "Event created", description: "Share your invite link with guests." });
   };
 
@@ -380,8 +419,66 @@ export default function Evite() {
                         ))}
                       </div>
                     </div>
+                    {/* Custom photos for AI-styled invite */}
+                    <div className="border rounded-xl p-4">
+                      <div className="flex items-center justify-between">
+                        <Label className="mb-2">Customize invite with my photos</Label>
+                        <label className="inline-flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={customizeEnabled}
+                            onChange={(e) => setCustomizeEnabled(e.target.checked)}
+                          />
+                          <span>Enable</span>
+                        </label>
+                      </div>
+                      {customizeEnabled && (
+                        <div className="space-y-3">
+                          <div className="grid md:grid-cols-2 gap-3">
+                            <div>
+                              <Label>Style</Label>
+                              <select
+                                className="w-full border rounded-md h-10 px-3"
+                                value={customStyle}
+                                onChange={(e) => setCustomStyle(e.target.value as any)}
+                              >
+                                <option value="classic">Classic</option>
+                                <option value="elegant">Elegant</option>
+                                <option value="kids">Kids</option>
+                                <option value="minimal">Minimal</option>
+                              </select>
+                            </div>
+                            <div>
+                              <Label>Upload photos (up to 3)</Label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files || []).slice(0, 3);
+                                  setCustomFiles(files);
+                                }}
+                                className="block w-full text-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Best results with wide (16:9) images. Large, clear photos recommended.
+                              </p>
+                            </div>
+                          </div>
+                          {customFiles.length > 0 && (
+                            <div className="grid grid-cols-3 gap-2">
+                              {customFiles.map((f, i) => (
+                                <div key={i} className="aspect-video border rounded-lg overflow-hidden">
+                                  <img src={URL.createObjectURL(f)} className="w-full h-full object-cover" />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="flex gap-3">
-                      <Button onClick={createEvent} className="flex-1">
+                      <Button onClick={createEvent} className="flex-1" disabled={isUploading}>
                         Create Event
                       </Button>
                       {activeEvent && (
