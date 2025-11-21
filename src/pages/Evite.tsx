@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette, MessageSquare } from "lucide-react";
+import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette, MessageSquare, User, LogOut, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { loadEvents, loadEvent, saveEvents, saveEvent, deleteEvent as deleteEventFromStorage, type EviteEvent, type Guest } from "@/utils/eviteStorage";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
@@ -28,7 +28,7 @@ const TEMPLATES = [
 export default function Evite() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut, isAdmin } = useAuth();
   const [tab, setTab] = useState("create");
 
   const [events, setEvents] = useState<EviteEvent[]>([]);
@@ -746,6 +746,41 @@ export default function Evite() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
+      {/* Header with Authentication */}
+      <div className="absolute top-4 right-4 z-50 pointer-events-auto" key={`auth-${user?.id || 'no-user'}`}>
+        {user ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground hidden sm:inline">Welcome, {user.email}</span>
+            {isAdmin && (
+              <Button
+                onClick={() => navigate('/admin')}
+                variant="outline"
+                size="sm"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Admin
+              </Button>
+            )}
+            <Button onClick={signOut} variant="outline" size="sm">
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => setShowLogin(true)} 
+              variant="outline"
+              size="sm"
+            >
+              <User className="w-4 h-4 mr-2" />
+              Sign In
+            </Button>
+          </div>
+        )}
+      </div>
+      
       <div className="container mx-auto px-4 py-10">
         <div className="mb-8">
           <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent">
