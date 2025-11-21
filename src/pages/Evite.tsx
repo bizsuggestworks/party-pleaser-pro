@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -81,6 +82,10 @@ export default function Evite() {
   const [customStyle, setCustomStyle] = useState<"classic" | "elegant" | "kids" | "minimal">("classic");
   const [customFiles, setCustomFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [showTransformPreview, setShowTransformPreview] = useState(false);
+  const [transformedImageUrl, setTransformedImageUrl] = useState<string | null>(null);
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
+  const [imageApproved, setImageApproved] = useState<boolean | null>(null);
 
   const [newGuest, setNewGuest] = useState({ name: "", email: "", phone: "" });
 
@@ -104,6 +109,9 @@ export default function Evite() {
       setCustomizeEnabled(activeEvent.useCustomImages || false);
       setCustomStyle(activeEvent.customStyle || "classic");
       setCustomFiles([]); // Clear file selection when switching events
+      setImageApproved(null); // Reset approval state
+      setTransformedImageUrl(null); // Reset transformed image
+      setOriginalImageUrl(null); // Reset original image
     } else {
       // Reset to empty form when no event is selected
       setDraft({
@@ -118,6 +126,9 @@ export default function Evite() {
       setCustomizeEnabled(false);
       setCustomStyle("classic");
       setCustomFiles([]);
+      setImageApproved(null); // Reset approval state
+      setTransformedImageUrl(null); // Reset transformed image
+      setOriginalImageUrl(null); // Reset original image
     }
   }, [activeEventId, activeEvent]);
 
@@ -160,8 +171,8 @@ export default function Evite() {
     // Save to Supabase
     try {
       // If customization enabled and files selected, upload and update event
-      // If updating without new files, preserve existing images
-      if (customizeEnabled && customFiles.length > 0) {
+      // Only include image if user approved it (imageApproved === true)
+      if (customizeEnabled && customFiles.length > 0 && imageApproved === true && transformedImageUrl) {
         setIsUploading(true);
         const uploadedUrls: string[] = [];
         console.log(`[Evite] Uploading ${customFiles.length} files for event ${id}`);
@@ -304,11 +315,17 @@ export default function Evite() {
               console.log(`[Evite] ✓✓✓ Image transformed to Ghibli style! ✓✓✓`);
               console.log(`[Evite] Original URL: ${pub.publicUrl}`);
               console.log(`[Evite] Transformed URL: ${transformData.transformedImageUrl}`);
-              uploadedUrls.push(transformData.transformedImageUrl);
+              // Use the transformed image that was already previewed and approved
+              uploadedUrls.push(transformedImageUrl || transformData.transformedImageUrl);
             } else {
-              console.warn("[Evite] No transformed image URL returned or same as original, using original");
+              console.warn("[Evite] No transformed image URL returned or same as original");
               console.warn("[Evite] Transform data:", transformData);
-              uploadedUrls.push(pub.publicUrl);
+              // Use the transformed image that was already previewed and approved, or original if no preview
+              if (transformedImageUrl) {
+                uploadedUrls.push(transformedImageUrl);
+              } else {
+                uploadedUrls.push(pub.publicUrl);
+              }
             }
           } catch (transformException) {
             console.error("[Evite] Transformation exception:", transformException);
@@ -335,12 +352,18 @@ export default function Evite() {
         // Update local state with images
         setEvents((prev) => prev.map((e) => (e.id === id ? updatedEvent : e)));
         console.log(`[Evite] Event ${id} ${isUpdating ? 'updated' : 'saved'} with ${uploadedUrls.length} custom images`);
-      } else if (customizeEnabled && isUpdating && activeEvent?.customImages && activeEvent.customImages.length > 0) {
-        // Preserve existing images when updating without new files
+      } else if (customizeEnabled && isUpdating && activeEvent?.customImages && activeEvent.customImages.length > 0 && imageApproved !== false) {
+        // Preserve existing images when updating without new files (only if not explicitly denied)
         const updatedEvent: EviteEvent = { ...eventData, customImages: activeEvent.customImages };
         await saveEvent(updatedEvent);
         setEvents((prev) => prev.map((e) => (e.id === id ? updatedEvent : e)));
         console.log(`[Evite] Event ${id} updated, preserving existing ${activeEvent.customImages.length} custom images`);
+      } else if (customizeEnabled && imageApproved === false) {
+        // User denied the image, save without images
+        const updatedEvent: EviteEvent = { ...eventData, customImages: [], useCustomImages: false };
+        await saveEvent(updatedEvent);
+        setEvents((prev) => prev.map((e) => (e.id === id ? updatedEvent : e)));
+        console.log(`[Evite] Event ${id} saved without images (user denied)`);
       } else {
         await saveEvent(eventData);
         console.log(`[Evite] Event ${id} ${isUpdating ? 'updated' : 'saved'} without custom images`);
@@ -814,12 +837,97 @@ export default function Evite() {
                           </div>
                           {customFiles.length > 0 && (
                             <div className="mt-3">
-                              <div className="aspect-video border rounded-lg overflow-hidden max-w-md">
-                                <img src={URL.createObjectURL(customFiles[0])} className="w-full h-full object-cover" alt="Preview" />
+                              <div className="aspect-video border rounded-lg overflow-hidden max-w-md relative">
+                                <img 
+                                  src={URL.createObjectURL(customFiles[0])} 
+                                  className="w-full h-full object-contain" 
+                                  alt="Preview" 
+                                  style={{ objectPosition: 'center' }}
+                                />
                               </div>
                               <p className="text-xs text-muted-foreground mt-2">
-                                Preview: This will be transformed to Ghibli art style
+                                Click "Transform & Preview" to see Ghibli art style transformation
                               </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="mt-2"
+                                onClick={async () => {
+                                  // Upload and transform to show preview
+                                  const file = customFiles[0];
+                                  setIsUploading(true);
+                                  try {
+                                    const timestamp = Date.now();
+                                    const path = `evite-uploads/preview_${timestamp}_${file.name}`;
+                                    
+                                    const { data: up, error: upErr } = await (supabase as any).storage.from("evite-uploads").upload(path, file, {
+                                      cacheControl: "3600",
+                                      upsert: false,
+                                    });
+                                    
+                                    if (upErr) {
+                                      toast({
+                                        title: "Upload failed",
+                                        description: "Could not upload image for preview",
+                                        variant: "destructive",
+                                      });
+                                      setIsUploading(false);
+                                      return;
+                                    }
+                                    
+                                    const { data: pub } = (supabase as any).storage.from("evite-uploads").getPublicUrl(up.path);
+                                    if (!pub?.publicUrl) {
+                                      toast({
+                                        title: "Preview failed",
+                                        description: "Could not get image URL",
+                                        variant: "destructive",
+                                      });
+                                      setIsUploading(false);
+                                      return;
+                                    }
+                                    
+                                    setOriginalImageUrl(pub.publicUrl);
+                                    
+                                    // Transform image
+                                    toast({
+                                      title: "Transforming...",
+                                      description: "Converting to Ghibli art style",
+                                    });
+                                    
+                                    const { data: transformData, error: transformError } = await supabase.functions.invoke("transform-image", {
+                                      body: {
+                                        imageUrl: pub.publicUrl,
+                                        eventTitle: draft.title || "Event"
+                                      },
+                                    });
+                                    
+                                    if (transformError || !transformData?.transformedImageUrl) {
+                                      toast({
+                                        title: "Transformation failed",
+                                        description: "Using original image",
+                                        variant: "default",
+                                      });
+                                      setTransformedImageUrl(pub.publicUrl);
+                                    } else {
+                                      setTransformedImageUrl(transformData.transformedImageUrl);
+                                    }
+                                    
+                                    setShowTransformPreview(true);
+                                  } catch (err) {
+                                    console.error("Preview error:", err);
+                                    toast({
+                                      title: "Preview error",
+                                      description: "Could not generate preview",
+                                      variant: "destructive",
+                                    });
+                                  } finally {
+                                    setIsUploading(false);
+                                  }
+                                }}
+                                disabled={isUploading}
+                              >
+                                {isUploading ? "Transforming..." : "Transform & Preview"}
+                              </Button>
                             </div>
                           )}
                         </div>
@@ -1116,6 +1224,76 @@ export default function Evite() {
           </div>
         </div>
       </div>
+      
+      {/* Transform Preview Dialog */}
+      <Dialog open={showTransformPreview} onOpenChange={setShowTransformPreview}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Preview: Ghibli Art Style Transformation</DialogTitle>
+            <DialogDescription>
+              This is how your invite will look with the Ghibli art style transformation. Approve to use this image, or deny to send invites without any image.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {transformedImageUrl && (
+              <div className="space-y-2">
+                <Label>Transformed Image (Ghibli Style)</Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <img 
+                    src={transformedImageUrl} 
+                    alt="Ghibli transformed preview" 
+                    className="w-full h-auto object-contain max-h-[500px]"
+                    style={{ objectPosition: 'center' }}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {originalImageUrl && (
+              <div className="space-y-2">
+                <Label>Original Image (for comparison)</Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <img 
+                    src={originalImageUrl} 
+                    alt="Original preview" 
+                    className="w-full h-auto object-contain max-h-[300px]"
+                    style={{ objectPosition: 'center' }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setImageApproved(false);
+                setShowTransformPreview(false);
+                toast({
+                  title: "Image denied",
+                  description: "Invites will be sent without images",
+                });
+              }}
+            >
+              Deny - Send Without Image
+            </Button>
+            <Button
+              onClick={() => {
+                setImageApproved(true);
+                setShowTransformPreview(false);
+                toast({
+                  title: "Image approved",
+                  description: "This Ghibli art style image will be used in invites",
+                });
+              }}
+            >
+              Approve - Use This Image
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
