@@ -125,28 +125,24 @@ export default function Evite() {
         const uploadedUrls: string[] = [];
         console.log(`[Evite] Uploading ${customFiles.length} files for event ${id}`);
         
-        // Check if bucket exists, if not show helpful error
+        // Try to check if bucket exists (may fail due to permissions, but that's okay)
         try {
           const { data: buckets, error: bucketError } = await (supabase as any).storage.listBuckets();
           if (bucketError) {
-            console.error("[Evite] Error checking buckets:", bucketError);
+            console.warn("[Evite] Could not list buckets (permission issue, but will try upload anyway):", bucketError);
+            // Don't fail - just try the upload
           } else {
             const bucketExists = buckets?.some((b: any) => b.name === "evite-uploads");
-            if (!bucketExists) {
-              console.error("[Evite] Bucket 'evite-uploads' does not exist!");
-              toast({ 
-                title: "Storage bucket missing", 
-                description: "Please create 'evite-uploads' bucket in Supabase Storage. See console for details.",
-                variant: "destructive",
-                duration: 10000
-              });
-              setIsUploading(false);
-              return;
+            if (bucketExists) {
+              console.log("[Evite] ✓ Bucket 'evite-uploads' exists");
+            } else {
+              console.warn("[Evite] Bucket 'evite-uploads' not found in list, but will try upload anyway");
+              // Don't fail - the bucket might exist but we don't have permission to list it
             }
-            console.log("[Evite] ✓ Bucket 'evite-uploads' exists");
           }
         } catch (checkError) {
-          console.warn("[Evite] Could not check bucket existence:", checkError);
+          console.warn("[Evite] Could not check bucket existence (will try upload anyway):", checkError);
+          // Continue with upload attempt
         }
         
         for (const [index, file] of customFiles.entries()) {
