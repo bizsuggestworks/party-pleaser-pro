@@ -35,13 +35,30 @@ export default function Evite() {
   useEffect(() => {
     async function fetchEvents() {
       try {
+        console.log("[Evite] Loading events...");
         const loadedEvents = await loadEvents();
+        console.log(`[Evite] Loaded ${loadedEvents.length} events:`, loadedEvents.map(e => ({ id: e.id, title: e.title, hasImages: !!e.customImages?.length })));
         setEvents(loadedEvents);
         if (loadedEvents.length > 0 && !activeEventId) {
           setActiveEventId(loadedEvents[0].id);
+          console.log(`[Evite] Set active event to: ${loadedEvents[0].id}`);
         }
       } catch (error) {
-        console.error("Failed to load events:", error);
+        console.error("[Evite] Failed to load events:", error);
+        // Try to load from localStorage as fallback
+        try {
+          const raw = localStorage.getItem("partyify-evite-events");
+          if (raw) {
+            const localEvents = JSON.parse(raw);
+            console.log(`[Evite] Loaded ${localEvents.length} events from localStorage fallback`);
+            setEvents(localEvents);
+            if (localEvents.length > 0 && !activeEventId) {
+              setActiveEventId(localEvents[0].id);
+            }
+          }
+        } catch (localError) {
+          console.error("[Evite] Failed to load from localStorage:", localError);
+        }
       } finally {
         setLoading(false);
       }
@@ -94,38 +111,175 @@ export default function Evite() {
       customImages: [],
       createdAt: Date.now(),
     };
+    
+    // Add to local state first for immediate UI update
     const next = [newEvent, ...events];
     setEvents(next);
     setActiveEventId(id);
+    
     // Save to Supabase
     try {
       // If customization enabled and files selected, upload and update event
       if (customizeEnabled && customFiles.length > 0) {
         setIsUploading(true);
         const uploadedUrls: string[] = [];
-        for (const [index, file] of customFiles.entries()) {
-          const path = `evite-uploads/${id}/${Date.now()}_${index}_${file.name}`;
-          const { data: up, error: upErr } = await (supabase as any).storage.from("evite-uploads").upload(path, file, {
-            cacheControl: "3600",
-            upsert: false,
-          });
-          if (upErr) {
-            console.error("Upload error:", upErr);
-            toast({ title: "Upload failed", description: upErr.message, variant: "destructive" });
-            continue;
+        console.log(`[Evite] Uploading ${customFiles.length} files for event ${id}`);
+        
+        // Check if bucket exists, if not show helpful error
+        try {
+          const { data: buckets, error: bucketError } = await (supabase as any).storage.listBuckets();
+          if (bucketError) {
+            console.error("[Evite] Error checking buckets:", bucketError);
+          } else {
+            const bucketExists = buckets?.some((b: any) => b.name === "evite-uploads");
+            if (!bucketExists) {
+              console.error("[Evite] Bucket 'evite-uploads' does not exist!");
+              toast({ 
+                title: "Storage bucket missing", 
+                description: "Please create 'evite-uploads' bucket in Supabase Storage. See console for details.",
+                variant: "destructive",
+                duration: 10000
+              });
+              setIsUploading(false);
+              return;
+            }
+            console.log("[Evite] ✓ Bucket 'evite-uploads' exists");
           }
-          const { data: pub } = (supabase as any).storage.from("evite-uploads").getPublicUrl(up.path);
-          if (pub?.publicUrl) {
-            uploadedUrls.push(pub.publicUrl);
+        } catch (checkError) {
+          console.warn("[Evite] Could not check bucket existence:", checkError);
+        }
+        
+        for (const [index, file] of customFiles.entries()) {
+          const timestamp = Date.now();
+          const path = `evite-uploads/${id}/${timestamp}_${index}_${file.name}`;
+          console.log(`[Evite] Uploading file ${index + 1}/${customFiles.length}:`);
+          console.log(`[Evite]   Name: ${file.name}`);
+          console.log(`[Evite]   Size: ${(file.size / 1024).toFixed(2)} KB`);
+          console.log(`[Evite]   Type: ${file.type}`);
+          console.log(`[Evite]   Target path: ${path}`);
+          
+          try {
+            const { data: up, error: upErr } = await (supabase as any).storage.from("evite-uploads").upload(path, file, {
+              cacheControl: "3600",
+              upsert: false,
+            });
+            
+            if (upErr) {
+              console.error("[Evite] Upload error details:", {
+                error: upErr,
+                message: upErr.message,
+                statusCode: upErr.statusCode,
+                errorCode: upErr.error,
+                fullError: JSON.stringify(upErr, null, 2)
+              });
+              
+              const errorMsg = upErr.message || String(upErr);
+              
+              // Provide helpful error messages
+              if (errorMsg.includes("Bucket not found") || errorMsg.includes("does not exist")) {
+                toast({ 
+                  title: "Storage bucket not found", 
+                  description: "Please create 'evite-uploads' bucket in Supabase Dashboard → Storage",
+                  variant: "destructive",
+                  duration: 10000
+                });
+              } else if (errorMsg.includes("new row violates row-level security") || errorMsg.includes("RLS")) {
+                toast({ 
+                  title: "Permission denied", 
+                  description: "Storage bucket needs public access. Check bucket policies in Supabase Dashboard → Storage → evite-uploads → Policies",
+                  variant: "destructive",
+                  duration: 10000
+                });
+              } else if (errorMsg.includes("JWT") || errorMsg.includes("auth")) {
+                toast({ 
+                  title: "Authentication error", 
+                  description: "Please sign in to upload images. Check if you're logged in.",
+                  variant: "destructive",
+                  duration: 10000
+                });
+              } else {
+                toast({ 
+                  title: "Upload failed", 
+                  description: errorMsg.length > 100 ? errorMsg.substring(0, 100) + "..." : errorMsg, 
+                  variant: "destructive",
+                  duration: 10000
+                });
+              }
+              continue;
+            }
+            
+            if (!up || !up.path) {
+              console.error(`[Evite] Upload succeeded but no data returned. Response:`, up);
+              toast({ 
+                title: "Upload incomplete", 
+                description: "File uploaded but could not get file path. Check console for details.",
+                variant: "destructive",
+                duration: 10000
+              });
+              continue;
+            }
+            
+            console.log(`[Evite] ✓ Upload response:`, up);
+            console.log(`[Evite]   File path: ${up.path}`);
+            
+            // Get public URL
+            const { data: pub } = (supabase as any).storage.from("evite-uploads").getPublicUrl(up.path);
+            console.log(`[Evite] Public URL response:`, pub);
+            
+            if (pub?.publicUrl) {
+              uploadedUrls.push(pub.publicUrl);
+              console.log(`[Evite] ✓✓✓ File uploaded successfully! ✓✓✓`);
+              console.log(`[Evite]   Public URL: ${pub.publicUrl}`);
+              
+              // Verify the URL is accessible
+              try {
+                const testResponse = await fetch(pub.publicUrl, { method: 'HEAD' });
+                if (testResponse.ok) {
+                  console.log(`[Evite] ✓ URL is accessible (status: ${testResponse.status})`);
+                } else {
+                  console.warn(`[Evite] ⚠ URL returned status ${testResponse.status} - may not be public`);
+                }
+              } catch (fetchErr) {
+                console.warn(`[Evite] ⚠ Could not verify URL accessibility:`, fetchErr);
+              }
+            } else {
+              console.error(`[Evite] ✗ Failed to get public URL for uploaded file`);
+              console.error(`[Evite]   Upload data:`, up);
+              console.error(`[Evite]   Public URL data:`, pub);
+              toast({ 
+                title: "URL generation failed", 
+                description: "File uploaded but could not generate public URL. Check console for details.",
+                variant: "destructive",
+                duration: 10000
+              });
+            }
+          } catch (uploadException) {
+            console.error(`[Evite] Exception during upload:`, uploadException);
+            toast({ 
+              title: "Upload exception", 
+              description: uploadException instanceof Error ? uploadException.message : String(uploadException),
+              variant: "destructive",
+              duration: 10000
+            });
           }
         }
+        
+        console.log(`[Evite] All files uploaded. Total URLs: ${uploadedUrls.length}`, uploadedUrls);
         const updatedEvent: EviteEvent = { ...newEvent, customImages: uploadedUrls };
         await saveEvent(updatedEvent);
+        
         // Update local state with images
         setEvents((prev) => prev.map((e) => (e.id === id ? updatedEvent : e)));
+        console.log(`[Evite] Event ${id} saved with ${uploadedUrls.length} custom images`);
       } else {
         await saveEvent(newEvent);
+        console.log(`[Evite] Event ${id} saved without custom images`);
       }
+      
+      // Reload events to ensure consistency
+      const reloadedEvents = await loadEvents();
+      setEvents(reloadedEvents);
+      console.log(`[Evite] Reloaded ${reloadedEvents.length} events after creation`);
     } finally {
       setIsUploading(false);
     }
@@ -349,8 +503,14 @@ export default function Evite() {
               <CardTitle>Your Events</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {events.length === 0 && <p className="text-sm text-muted-foreground">No events yet</p>}
-              {events.map((event) => (
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Loading events...</p>
+              ) : events.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No events yet. Create your first event below.</p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground mb-2">{events.length} event{events.length === 1 ? '' : 's'}</p>
+                  {events.map((event) => (
                 <div key={event.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border">
                   <button
                     className={`text-left flex-1 ${activeEventId === event.id ? "font-semibold" : ""}`}
@@ -365,7 +525,9 @@ export default function Evite() {
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
-              ))}
+                  ))}
+                </>
+              )}
             </CardContent>
           </Card>
 

@@ -103,8 +103,18 @@ export async function loadEvent(id: string): Promise<EviteEvent | null> {
 }
 
 // Track recently deleted event IDs to prevent them from being re-synced
+// Note: This is in-memory only and resets on page reload
 const recentlyDeletedIds = new Set<string>();
 const DELETION_MEMORY_MS = 30000; // Remember deletions for 30 seconds
+
+// Clear deletion memory on page load to prevent false positives
+if (typeof window !== 'undefined') {
+  // Clear any stale deletion memory on page load
+  setTimeout(() => {
+    recentlyDeletedIds.clear();
+    console.log("[eviteStorage] Cleared deletion memory on page load");
+  }, DELETION_MEMORY_MS + 1000);
+}
 
 // Load all events from Supabase, fallback to localStorage
 export async function loadEvents(): Promise<EviteEvent[]> {
@@ -116,9 +126,18 @@ export async function loadEvents(): Promise<EviteEvent[]> {
       .order("created_at", { ascending: false });
 
     if (!error && data && Array.isArray(data)) {
+      console.log(`[eviteStorage] Loaded ${data.length} events from Supabase`);
+      console.log(`[eviteStorage] Recently deleted IDs:`, Array.from(recentlyDeletedIds));
+      
       // Filter out recently deleted events to prevent them from reappearing
       const supabaseEvents = data
-        .filter((e: any) => !recentlyDeletedIds.has(e.id))
+        .filter((e: any) => {
+          const isDeleted = recentlyDeletedIds.has(e.id);
+          if (isDeleted) {
+            console.log(`[eviteStorage] Filtering out recently deleted event: ${e.id} (${e.title})`);
+          }
+          return !isDeleted;
+        })
         .map((e: any) => ({
           id: e.id,
           title: e.title,

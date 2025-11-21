@@ -188,7 +188,15 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
       mainImage,
       additionalImagesCount: additionalImages.length,
       mainImageUrl: mainImage,
+      allImages: customImages,
     });
+    
+    // Verify image URL is valid
+    if (!mainImage || !mainImage.startsWith('http')) {
+      console.error("[buildEmailHtml] Invalid main image URL:", mainImage);
+      // Fall back to standard template
+      return buildStandardEmailHtml(event, inviteUrl, aiInviteText);
+    }
 
     return `
     <!DOCTYPE html>
@@ -276,6 +284,18 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
   }
 
   // Standard invite without custom images
+  return buildStandardEmailHtml(event, inviteUrl, aiInviteText);
+}
+
+function buildStandardEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: string) {
+  const title = htmlEscape(event.title);
+  const host = htmlEscape(event.hostName || "Your host");
+  const date = htmlEscape(event.date);
+  const time = htmlEscape(event.time);
+  const location = htmlEscape(event.location);
+  const description = htmlEscape(event.description || "");
+  const inviteMessage = htmlEscape(aiInviteText || `We're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories.`);
+
   return `
   <div style="font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5;color:#111827">
     <div style="max-width:640px;margin:0 auto;padding:24px">
