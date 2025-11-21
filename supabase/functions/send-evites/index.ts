@@ -136,7 +136,7 @@ IMPORTANT: Use the actual host name "${event.hostName}" in your message. ${guest
   return fallback;
 }
 
-function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: string) {
+function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: string, isUpdate?: boolean) {
   const title = htmlEscape(event.title);
   const host = htmlEscape(event.hostName || "Your host");
   const date = htmlEscape(event.date);
@@ -213,7 +213,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
     if (!mainImage || !mainImage.startsWith('http')) {
       console.error("[buildEmailHtml] Invalid main image URL:", mainImage);
       // Fall back to standard template
-      return buildStandardEmailHtml(event, inviteUrl, aiInviteText);
+      return buildStandardEmailHtml(event, inviteUrl, aiInviteText, isUpdate);
     }
 
     return `
@@ -256,6 +256,14 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
 
         <!-- Invite Content -->
         <div style="padding:32px 24px">
+          <!-- Update Notice -->
+          ${isUpdate ? `
+          <div style="padding:16px;background:#fef3c7;border-left:4px solid #f59e0b;margin:24px;border-radius:8px">
+            <p style="margin:0;font-size:16px;line-height:1.6;color:#92400e;font-weight:600">📢 Event Update</p>
+            <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#78350f">This is an update to the original invitation. Please review the event details below.</p>
+          </div>
+          ` : ''}
+          
           <!-- AI-Generated Invite Message -->
           <div style="padding:24px;background:${config.gradient};border-radius:16px;margin-bottom:24px;text-align:center">
             <p style="margin:0;font-size:18px;line-height:1.6;color:#ffffff;font-weight:500">${inviteMessage}</p>
@@ -315,7 +323,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
   return buildStandardEmailHtml(event, inviteUrl, aiInviteText);
 }
 
-function buildStandardEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: string) {
+function buildStandardEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: string, isUpdate?: boolean) {
   const title = htmlEscape(event.title);
   const host = htmlEscape(event.hostName || "Your host");
   const date = htmlEscape(event.date);
@@ -327,6 +335,12 @@ function buildStandardEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteTe
   return `
   <div style="font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5;color:#111827">
     <div style="max-width:640px;margin:0 auto;padding:24px">
+      ${isUpdate ? `
+      <div style="padding:16px;background:#fef3c7;border-left:4px solid #f59e0b;margin-bottom:16px;border-radius:8px">
+        <p style="margin:0;font-size:16px;line-height:1.6;color:#92400e;font-weight:600">📢 Event Update</p>
+        <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#78350f">This is an update to the original invitation. Please review the event details below.</p>
+      </div>
+      ` : ''}
       <h1 style="font-size:24px;margin:0 0 8px">You're invited: ${title}</h1>
       <p style="margin:0 0 16px;color:#6b7280">Hosted by ${host}</p>
       <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:16px">
@@ -627,6 +641,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const event: EviteEvent = body.event;
     const origin: string = body.origin || Deno.env.get("SITE_URL") || "";
+    const isUpdate: boolean = body.isUpdate || false;
 
     if (!event || !event.id) {
       return new Response(JSON.stringify({ error: "Missing event payload" }), {
@@ -673,7 +688,7 @@ Deno.serve(async (req) => {
       // Send email
       try {
         console.log(`[send-evites] Processing email for guest: ${g.name} (${g.email})`);
-        const subject = `You're invited: ${event.title}`;
+        const subject = isUpdate ? `Event Update: ${event.title}` : `You're invited: ${event.title}`;
         
         // Generate personalized AI invite text for this guest
         let personalizedAiText: string | undefined;
@@ -688,7 +703,7 @@ Deno.serve(async (req) => {
           }
         }
         
-        const html = buildEmailHtml(event, inviteUrl, personalizedAiText);
+        const html = buildEmailHtml(event, inviteUrl, personalizedAiText, isUpdate);
         
         // Log a snippet of the HTML to verify images are included
         if (event.useCustomImages && event.customImages && event.customImages.length > 0) {

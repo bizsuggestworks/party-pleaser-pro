@@ -350,13 +350,66 @@ export default function Evite() {
       const reloadedEvents = await loadEvents();
       setEvents(reloadedEvents);
       console.log(`[Evite] Reloaded ${reloadedEvents.length} events after ${isUpdating ? 'update' : 'creation'}`);
+      
+      // If updating and there are guests, automatically send updated invites
+      if (isUpdating && eventData.guests.length > 0) {
+        console.log(`[Evite] Event updated with ${eventData.guests.length} guests, sending update invites...`);
+        try {
+          const latestEvent = await loadEvent(id);
+          const eventToSend = latestEvent || eventData;
+          
+          const { data, error } = await supabase.functions.invoke("send-evites", {
+            body: { 
+              event: eventToSend, 
+              origin: window.location.origin,
+              isUpdate: true // Flag to indicate this is an update
+            },
+          });
+          
+          if (error) {
+            console.error("[Evite] Failed to send update invites:", error);
+            toast({
+              title: "Event updated",
+              description: "Failed to send update invites. You can send them manually from the Share tab.",
+              variant: "default",
+            });
+          } else {
+            const sent = data?.sent ?? 0;
+            const failed = data?.failed || [];
+            const failedCount = failed.length;
+            
+            if (failedCount > 0) {
+              toast({
+                title: "Event updated",
+                description: `Sent ${sent} update invite${sent === 1 ? "" : "s"}, ${failedCount} failed.`,
+                variant: "default",
+              });
+            } else {
+              toast({
+                title: "Event updated",
+                description: `Sent ${sent} update invite${sent === 1 ? "" : "s"} to all guests.`,
+              });
+            }
+          }
+        } catch (inviteError) {
+          console.error("[Evite] Error sending update invites:", inviteError);
+          toast({
+            title: "Event updated",
+            description: "Failed to send update invites. You can send them manually from the Share tab.",
+            variant: "default",
+          });
+        }
+      }
     } finally {
       setIsUploading(false);
     }
-    toast({ 
-      title: isUpdating ? "Event updated" : "Event created", 
-      description: "Share your invite link with guests." 
-    });
+    
+    if (!isUpdating || eventData.guests.length === 0) {
+      toast({ 
+        title: isUpdating ? "Event updated" : "Event created", 
+        description: isUpdating ? "Update invites will be sent automatically." : "Share your invite link with guests." 
+      });
+    }
   };
 
   const deleteEvent = async (id: string) => {
@@ -485,7 +538,11 @@ export default function Evite() {
       });
       
       const { data, error } = await supabase.functions.invoke("send-evites", {
-        body: { event: eventToSend, origin: window.location.origin },
+        body: { 
+          event: eventToSend, 
+          origin: window.location.origin,
+          isUpdate: false // Manual send is not an update
+        },
       });
       if (error) {
         console.error("Supabase function error:", error);
