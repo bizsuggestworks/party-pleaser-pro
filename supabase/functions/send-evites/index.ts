@@ -123,6 +123,14 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
   const hasCustomImages = event.useCustomImages && event.customImages && event.customImages.length > 0;
   const customImages = event.customImages || [];
   const style = event.customStyle || "classic";
+  
+  console.log("[buildEmailHtml] Image check:", {
+    useCustomImages: event.useCustomImages,
+    customImagesLength: customImages.length,
+    hasCustomImages,
+    customImages: customImages,
+    style,
+  });
 
   // Style configurations
   const styleConfigs = {
@@ -495,16 +503,30 @@ Deno.serve(async (req) => {
 
     const inviteUrl = `${origin.replace(/\/$/, "")}/evite/${event.id}`;
 
+    // Log event data for debugging
+    console.log("[send-evites] Event data received:", {
+      id: event.id,
+      title: event.title,
+      useCustomImages: event.useCustomImages,
+      customImages: event.customImages,
+      customImagesCount: event.customImages?.length || 0,
+      customStyle: event.customStyle,
+      guestsCount: event.guests.length,
+    });
+
     // Generate AI invite text if custom images are available
     let aiInviteText: string | undefined;
     if (event.useCustomImages && event.customImages && event.customImages.length > 0) {
       try {
-        console.log("Generating AI invite text for event with custom images...");
+        console.log("[send-evites] Generating AI invite text for event with custom images...");
+        console.log("[send-evites] Custom images URLs:", event.customImages);
         aiInviteText = await generateAIInviteText(event);
-        console.log("✓ AI invite text generated successfully");
+        console.log("[send-evites] ✓ AI invite text generated successfully");
       } catch (err) {
-        console.warn("Failed to generate AI invite text, using fallback:", err);
+        console.warn("[send-evites] Failed to generate AI invite text, using fallback:", err);
       }
+    } else {
+      console.log("[send-evites] No custom images found. useCustomImages:", event.useCustomImages, "customImages:", event.customImages);
     }
 
     const results: { to: string; ok: boolean; error?: string; details?: string; type?: string }[] = [];

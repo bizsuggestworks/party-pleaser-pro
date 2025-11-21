@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { loadEvents, saveEvents, saveEvent, deleteEvent as deleteEventFromStorage, type EviteEvent, type Guest } from "@/utils/eviteStorage";
+import { loadEvents, loadEvent, saveEvents, saveEvent, deleteEvent as deleteEventFromStorage, type EviteEvent, type Guest } from "@/utils/eviteStorage";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 type GuestStatus = "pending" | "accepted" | "declined";
@@ -242,9 +242,22 @@ export default function Evite() {
       return;
     }
     try {
-      console.log("Calling send-evites function with event:", activeEvent);
+      // Reload the event from storage to ensure we have the latest data including custom images
+      const latestEvent = await loadEvent(activeEvent.id);
+      const eventToSend = latestEvent || activeEvent;
+      
+      console.log("Calling send-evites function with event:", {
+        id: eventToSend.id,
+        title: eventToSend.title,
+        useCustomImages: eventToSend.useCustomImages,
+        customImages: eventToSend.customImages,
+        customImagesCount: eventToSend.customImages?.length || 0,
+        customStyle: eventToSend.customStyle,
+        guestsCount: eventToSend.guests.length,
+      });
+      
       const { data, error } = await supabase.functions.invoke("send-evites", {
-        body: { event: activeEvent, origin: window.location.origin },
+        body: { event: eventToSend, origin: window.location.origin },
       });
       if (error) {
         console.error("Supabase function error:", error);
