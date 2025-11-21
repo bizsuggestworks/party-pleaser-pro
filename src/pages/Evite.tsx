@@ -434,7 +434,10 @@ export default function Evite() {
                       <AddressAutocomplete
                         label="Location"
                         value={draft.location}
-                        onChange={(address) => setDraft({ ...draft, location: address })}
+                        onChange={(address) => {
+                          console.log("[Evite] Location changed to:", address);
+                          setDraft((prev) => ({ ...prev, location: address }));
+                        }}
                         placeholder="Start typing an address (e.g., 10731...)"
                         required
                       />

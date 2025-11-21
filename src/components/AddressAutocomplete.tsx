@@ -79,7 +79,7 @@ export function AddressAutocomplete({
     };
   }, [apiKey]);
 
-  const initializeAutocomplete = () => {
+  const initializeAutocomplete = (): (() => void) | void => {
     if (!inputRef.current || !window.google?.maps?.places) return;
 
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
@@ -90,27 +90,69 @@ export function AddressAutocomplete({
     autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
       if (place.formatted_address) {
-        onChange(place.formatted_address);
+        // Prevent any default behavior and update state
+        const address = place.formatted_address;
+        console.log("[AddressAutocomplete] Place selected:", address);
+        // Use requestAnimationFrame to ensure this happens in the next render cycle
+        requestAnimationFrame(() => {
+          onChange(address);
+        });
       }
     });
 
     autocompleteRef.current = autocomplete;
+    
+    // Return cleanup function
+    return () => {
+      if (autocompleteRef.current) {
+        window.google?.maps?.event?.clearInstanceListeners?.(autocompleteRef.current);
+        autocompleteRef.current = null;
+      }
+    };
   };
 
   // Re-initialize when input ref is ready
   useEffect(() => {
     if (isLoaded && inputRef.current && !autocompleteRef.current) {
-      initializeAutocomplete();
+      const cleanup = initializeAutocomplete();
+      return cleanup;
     }
   }, [isLoaded]);
 
   return (
-    <div>
+    <div
+      onMouseDown={(e) => {
+        // Prevent any form submission when clicking on autocomplete suggestions
+        // This ensures clicking on Google's autocomplete dropdown doesn't trigger page reset
+        const target = e.target as HTMLElement;
+        if (target.closest('.pac-container')) {
+          // User is clicking on autocomplete suggestion
+          e.preventDefault();
+        }
+      }}
+    >
       {label && <Label>{label} {required && <span className="text-red-500">*</span>}</Label>}
       <Input
         ref={inputRef}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          // Update value as user types
+          onChange(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          // Prevent form submission on Enter if autocomplete is active
+          if (e.key === "Enter") {
+            // Check if autocomplete dropdown is visible
+            const pacContainer = document.querySelector('.pac-container');
+            if (pacContainer && pacContainer.getAttribute('style')?.includes('display: block')) {
+              // Autocomplete is open, let it handle the selection
+              // Don't prevent default - Google's autocomplete needs it
+            } else {
+              // No autocomplete active, prevent default to avoid form submission
+              e.preventDefault();
+            }
+          }
+        }}
         placeholder={placeholder}
         type="text"
         autoComplete="off"

@@ -138,7 +138,16 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
     hasCustomImages,
     customImages: customImages,
     style,
+    eventId: event.id,
   });
+  
+  // Debug: Log the actual image URLs
+  if (customImages.length > 0) {
+    console.log("[buildEmailHtml] Custom image URLs:", customImages);
+    customImages.forEach((img, idx) => {
+      console.log(`[buildEmailHtml] Image ${idx + 1}: ${img}`);
+    });
+  }
 
   // Style configurations
   const styleConfigs = {
@@ -174,6 +183,12 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
     // AI-generated invite with photos
     const mainImage = customImages[0];
     const additionalImages = customImages.slice(1, 3);
+    
+    console.log("[buildEmailHtml] Building email with custom images:", {
+      mainImage,
+      additionalImagesCount: additionalImages.length,
+      mainImageUrl: mainImage,
+    });
 
     return `
     <!DOCTYPE html>
@@ -186,7 +201,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
       <div style="max-width:640px;margin:0 auto;background-color:#ffffff">
         <!-- Hero Image Section -->
         <div style="position:relative;width:100%;height:300px;overflow:hidden;background:${config.gradient}">
-          <img src="${mainImage}" alt="${title}" style="width:100%;height:100%;object-fit:cover;opacity:0.9" />
+          <img src="${htmlEscape(mainImage)}" alt="${title}" style="width:100%;height:100%;object-fit:cover;opacity:0.9;display:block" />
           <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.6))"></div>
           <div style="position:absolute;bottom:0;left:0;right:0;padding:32px 24px;text-align:center">
             <h1 style="margin:0;font-size:36px;font-weight:bold;color:#ffffff;text-shadow:2px 2px 4px rgba(0,0,0,0.5);line-height:1.2">${title}</h1>
@@ -199,7 +214,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
         <div style="display:flex;gap:4px;padding:4px;background-color:#f3f4f6">
           ${additionalImages.map(img => `
             <div style="flex:1;height:120px;overflow:hidden;border-radius:8px">
-              <img src="${img}" alt="Event photo" style="width:100%;height:100%;object-fit:cover" />
+              <img src="${htmlEscape(img)}" alt="Event photo" style="width:100%;height:100%;object-fit:cover;display:block" />
             </div>
           `).join('')}
         </div>
@@ -241,13 +256,13 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
 
           <!-- CTA Button -->
           <div style="text-align:center;margin-bottom:24px">
-            <a href="${inviteUrl}" style="display:inline-block;background:${config.gradient};color:#ffffff;text-decoration:none;padding:16px 32px;border-radius:12px;font-size:18px;font-weight:600;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:transform 0.2s">View Invitation & RSVP</a>
+            <a href="${htmlEscape(inviteUrl)}" style="display:inline-block;background:${config.gradient};color:#ffffff;text-decoration:none;padding:16px 32px;border-radius:12px;font-size:18px;font-weight:600;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:transform 0.2s">View Invitation & RSVP</a>
           </div>
 
           <!-- Fallback Link -->
           <p style="margin:0;text-align:center;color:#6b7280;font-size:12px;line-height:1.6">
             If the button doesn't work, copy and paste this link into your browser:<br>
-            <a href="${inviteUrl}" style="color:${config.primaryColor};word-break:break-all">${inviteUrl}</a>
+            <a href="${htmlEscape(inviteUrl)}" style="color:${config.primaryColor};word-break:break-all;text-decoration:underline">${htmlEscape(inviteUrl)}</a>
           </p>
         </div>
 
@@ -274,9 +289,9 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
       </div>
       <p style="margin:0 0 16px">Please RSVP using the link below:</p>
       <p>
-        <a href="${inviteUrl}" style="display:inline-block;background:#7c3aed;color:white;text-decoration:none;padding:12px 18px;border-radius:10px">View invitation & RSVP</a>
+        <a href="${htmlEscape(inviteUrl)}" style="display:inline-block;background:#7c3aed;color:white;text-decoration:none;padding:12px 18px;border-radius:10px">View invitation & RSVP</a>
       </p>
-      <p style="margin:16px 0 0;color:#6b7280;font-size:12px">If the button doesn't work, paste this link in your browser:<br>${inviteUrl}</p>
+      <p style="margin:16px 0 0;color:#6b7280;font-size:12px">If the button doesn't work, paste this link in your browser:<br><a href="${htmlEscape(inviteUrl)}" style="color:#7c3aed;text-decoration:underline;word-break:break-all">${htmlEscape(inviteUrl)}</a></p>
     </div>
   </div>`;
 }
@@ -540,19 +555,38 @@ Deno.serve(async (req) => {
       console.log("[send-evites] No custom images found. useCustomImages:", event.useCustomImages, "customImages:", event.customImages);
     }
 
+    // Verify event has custom images before sending
+    console.log("[send-evites] Final verification before sending emails:", {
+      hasCustomImages: event.useCustomImages && event.customImages && event.customImages.length > 0,
+      customImagesArray: event.customImages,
+      customImagesCount: event.customImages?.length || 0,
+    });
+
     const results: { to: string; ok: boolean; error?: string; details?: string; type?: string }[] = [];
     for (const g of event.guests) {
       // Send email
       try {
-        console.log(`Processing email for guest: ${g.name} (${g.email})`);
+        console.log(`[send-evites] Processing email for guest: ${g.name} (${g.email})`);
         const subject = `You're invited: ${event.title}`;
         const html = buildEmailHtml(event, inviteUrl, aiInviteText);
+        
+        // Log a snippet of the HTML to verify images are included
+        if (event.useCustomImages && event.customImages && event.customImages.length > 0) {
+          const hasImageInHtml = html.includes('img src') && html.includes(event.customImages[0]);
+          console.log(`[send-evites] Email HTML includes images: ${hasImageInHtml}`);
+          if (!hasImageInHtml) {
+            console.error(`[send-evites] WARNING: Custom images exist but not found in email HTML!`);
+            console.log(`[send-evites] First image URL: ${event.customImages[0]}`);
+            console.log(`[send-evites] HTML snippet (first 500 chars): ${html.substring(0, 500)}`);
+          }
+        }
+        
         await sendSmtpEmail(g.email, subject, html);
-        console.log(`✓ Successfully sent email to ${g.email}`);
+        console.log(`[send-evites] ✓ Successfully sent email to ${g.email}`);
         results.push({ to: g.email, ok: true, details: "Email queued for delivery", type: "email" });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error(`✗ Failed sending email to ${g.email}:`, errorMsg);
+        console.error(`[send-evites] ✗ Failed sending email to ${g.email}:`, errorMsg);
         results.push({ to: g.email, ok: false, error: errorMsg, type: "email" });
       }
 
