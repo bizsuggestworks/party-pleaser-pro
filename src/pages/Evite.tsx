@@ -145,119 +145,138 @@ export default function Evite() {
           // Continue with upload attempt
         }
         
-        for (const [index, file] of customFiles.entries()) {
-          const timestamp = Date.now();
-          const path = `evite-uploads/${id}/${timestamp}_${index}_${file.name}`;
-          console.log(`[Evite] Uploading file ${index + 1}/${customFiles.length}:`);
-          console.log(`[Evite]   Name: ${file.name}`);
-          console.log(`[Evite]   Size: ${(file.size / 1024).toFixed(2)} KB`);
-          console.log(`[Evite]   Type: ${file.type}`);
-          console.log(`[Evite]   Target path: ${path}`);
+        // Upload and transform the single photo
+        const file = customFiles[0];
+        const timestamp = Date.now();
+        const originalPath = `evite-uploads/${id}/original_${timestamp}_${file.name}`;
+        console.log(`[Evite] Uploading photo for Ghibli transformation:`);
+        console.log(`[Evite]   Name: ${file.name}`);
+        console.log(`[Evite]   Size: ${(file.size / 1024).toFixed(2)} KB`);
+        console.log(`[Evite]   Type: ${file.type}`);
+        
+        try {
+          // Step 1: Upload original image
+          const { data: up, error: upErr } = await (supabase as any).storage.from("evite-uploads").upload(originalPath, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
           
-          try {
-            const { data: up, error: upErr } = await (supabase as any).storage.from("evite-uploads").upload(path, file, {
-              cacheControl: "3600",
-              upsert: false,
+          if (upErr) {
+            console.error("[Evite] Upload error details:", {
+              error: upErr,
+              message: upErr.message,
+              statusCode: upErr.statusCode,
+              errorCode: upErr.error,
+              fullError: JSON.stringify(upErr, null, 2)
             });
             
-            if (upErr) {
-              console.error("[Evite] Upload error details:", {
-                error: upErr,
-                message: upErr.message,
-                statusCode: upErr.statusCode,
-                errorCode: upErr.error,
-                fullError: JSON.stringify(upErr, null, 2)
-              });
-              
-              const errorMsg = upErr.message || String(upErr);
-              
-              // Provide helpful error messages
-              if (errorMsg.includes("Bucket not found") || errorMsg.includes("does not exist")) {
-                toast({ 
-                  title: "Storage bucket not found", 
-                  description: "Please create 'evite-uploads' bucket in Supabase Dashboard → Storage",
-                  variant: "destructive",
-                  duration: 10000
-                });
-              } else if (errorMsg.includes("new row violates row-level security") || errorMsg.includes("RLS")) {
-                toast({ 
-                  title: "Permission denied", 
-                  description: "Storage bucket needs public access. Check bucket policies in Supabase Dashboard → Storage → evite-uploads → Policies",
-                  variant: "destructive",
-                  duration: 10000
-                });
-              } else if (errorMsg.includes("JWT") || errorMsg.includes("auth")) {
-                toast({ 
-                  title: "Authentication error", 
-                  description: "Please sign in to upload images. Check if you're logged in.",
-                  variant: "destructive",
-                  duration: 10000
-                });
-              } else {
-                toast({ 
-                  title: "Upload failed", 
-                  description: errorMsg.length > 100 ? errorMsg.substring(0, 100) + "..." : errorMsg, 
-                  variant: "destructive",
-                  duration: 10000
-                });
-              }
-              continue;
-            }
+            const errorMsg = upErr.message || String(upErr);
             
-            if (!up || !up.path) {
-              console.error(`[Evite] Upload succeeded but no data returned. Response:`, up);
+            // Provide helpful error messages
+            if (errorMsg.includes("Bucket not found") || errorMsg.includes("does not exist")) {
               toast({ 
-                title: "Upload incomplete", 
-                description: "File uploaded but could not get file path. Check console for details.",
+                title: "Storage bucket not found", 
+                description: "Please create 'evite-uploads' bucket in Supabase Dashboard → Storage",
                 variant: "destructive",
                 duration: 10000
               });
-              continue;
-            }
-            
-            console.log(`[Evite] ✓ Upload response:`, up);
-            console.log(`[Evite]   File path: ${up.path}`);
-            
-            // Get public URL
-            const { data: pub } = (supabase as any).storage.from("evite-uploads").getPublicUrl(up.path);
-            console.log(`[Evite] Public URL response:`, pub);
-            
-            if (pub?.publicUrl) {
-              uploadedUrls.push(pub.publicUrl);
-              console.log(`[Evite] ✓✓✓ File uploaded successfully! ✓✓✓`);
-              console.log(`[Evite]   Public URL: ${pub.publicUrl}`);
-              
-              // Verify the URL is accessible
-              try {
-                const testResponse = await fetch(pub.publicUrl, { method: 'HEAD' });
-                if (testResponse.ok) {
-                  console.log(`[Evite] ✓ URL is accessible (status: ${testResponse.status})`);
-                } else {
-                  console.warn(`[Evite] ⚠ URL returned status ${testResponse.status} - may not be public`);
-                }
-              } catch (fetchErr) {
-                console.warn(`[Evite] ⚠ Could not verify URL accessibility:`, fetchErr);
-              }
+            } else if (errorMsg.includes("new row violates row-level security") || errorMsg.includes("RLS")) {
+              toast({ 
+                title: "Permission denied", 
+                description: "Storage bucket needs public access. Check bucket policies in Supabase Dashboard → Storage → evite-uploads → Policies",
+                variant: "destructive",
+                duration: 10000
+              });
+            } else if (errorMsg.includes("JWT") || errorMsg.includes("auth")) {
+              toast({ 
+                title: "Authentication error", 
+                description: "Please sign in to upload images. Check if you're logged in.",
+                variant: "destructive",
+                duration: 10000
+              });
             } else {
-              console.error(`[Evite] ✗ Failed to get public URL for uploaded file`);
-              console.error(`[Evite]   Upload data:`, up);
-              console.error(`[Evite]   Public URL data:`, pub);
               toast({ 
-                title: "URL generation failed", 
-                description: "File uploaded but could not generate public URL. Check console for details.",
+                title: "Upload failed", 
+                description: errorMsg.length > 100 ? errorMsg.substring(0, 100) + "..." : errorMsg, 
                 variant: "destructive",
                 duration: 10000
               });
             }
-          } catch (uploadException) {
-            console.error(`[Evite] Exception during upload:`, uploadException);
+            setIsUploading(false);
+            return;
+          }
+          
+          if (!up || !up.path) {
+            console.error(`[Evite] Upload succeeded but no data returned. Response:`, up);
             toast({ 
-              title: "Upload exception", 
-              description: uploadException instanceof Error ? uploadException.message : String(uploadException),
+              title: "Upload incomplete", 
+              description: "File uploaded but could not get file path. Check console for details.",
               variant: "destructive",
               duration: 10000
             });
+            setIsUploading(false);
+            return;
           }
+          
+          console.log(`[Evite] ✓ Original image uploaded:`, up.path);
+          
+          // Get public URL of original
+          const { data: pub } = (supabase as any).storage.from("evite-uploads").getPublicUrl(up.path);
+          if (!pub?.publicUrl) {
+            console.error(`[Evite] Failed to get public URL`);
+            toast({ 
+              title: "URL generation failed", 
+              description: "File uploaded but could not generate public URL.",
+              variant: "destructive",
+              duration: 10000
+            });
+            setIsUploading(false);
+            return;
+          }
+          
+          console.log(`[Evite] Original image URL: ${pub.publicUrl}`);
+          
+          // Step 2: Transform image to Ghibli style
+          console.log(`[Evite] Transforming image to Ghibli art style...`);
+          toast({ 
+            title: "Transforming image", 
+            description: "Converting your photo to Studio Ghibli art style...",
+            duration: 5000
+          });
+          
+          try {
+            const { data: transformData, error: transformError } = await supabase.functions.invoke("transform-image", {
+              body: { 
+                imageUrl: pub.publicUrl,
+                eventTitle: draft.title
+              },
+            });
+            
+            if (transformError) {
+              console.warn("[Evite] Image transformation failed, using original:", transformError);
+              // Use original image if transformation fails
+              uploadedUrls.push(pub.publicUrl);
+            } else if (transformData?.transformedImageUrl) {
+              console.log(`[Evite] ✓ Image transformed to Ghibli style:`, transformData.transformedImageUrl);
+              uploadedUrls.push(transformData.transformedImageUrl);
+            } else {
+              console.warn("[Evite] No transformed image URL returned, using original");
+              uploadedUrls.push(pub.publicUrl);
+            }
+          } catch (transformException) {
+            console.warn("[Evite] Transformation exception, using original:", transformException);
+            uploadedUrls.push(pub.publicUrl);
+          }
+        } catch (uploadException) {
+          console.error(`[Evite] Exception during upload:`, uploadException);
+          toast({ 
+            title: "Upload exception", 
+            description: uploadException instanceof Error ? uploadException.message : String(uploadException),
+            variant: "destructive",
+            duration: 10000
+          });
+          setIsUploading(false);
+          return;
         }
         
         console.log(`[Evite] All files uploaded. Total URLs: ${uploadedUrls.length}`, uploadedUrls);
@@ -659,29 +678,33 @@ export default function Evite() {
                               </select>
                             </div>
                             <div>
-                              <Label>Upload photos (up to 3)</Label>
+                              <Label>Upload photo (1 photo will be transformed to Ghibli art style)</Label>
                               <input
                                 type="file"
                                 accept="image/*"
-                                multiple
                                 onChange={(e) => {
-                                  const files = Array.from(e.target.files || []).slice(0, 3);
-                                  setCustomFiles(files);
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    setCustomFiles([file]);
+                                  } else {
+                                    setCustomFiles([]);
+                                  }
                                 }}
                                 className="block w-full text-sm"
                               />
                               <p className="text-xs text-muted-foreground mt-1">
-                                Best results with wide (16:9) images. Large, clear photos recommended.
+                                Your photo will be transformed into Studio Ghibli art style with "Welcome to the party" text.
                               </p>
                             </div>
                           </div>
                           {customFiles.length > 0 && (
-                            <div className="grid grid-cols-3 gap-2">
-                              {customFiles.map((f, i) => (
-                                <div key={i} className="aspect-video border rounded-lg overflow-hidden">
-                                  <img src={URL.createObjectURL(f)} className="w-full h-full object-cover" />
-                                </div>
-                              ))}
+                            <div className="mt-3">
+                              <div className="aspect-video border rounded-lg overflow-hidden max-w-md">
+                                <img src={URL.createObjectURL(customFiles[0])} className="w-full h-full object-cover" alt="Preview" />
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Preview: This will be transformed to Ghibli art style
+                              </p>
                             </div>
                           )}
                         </div>

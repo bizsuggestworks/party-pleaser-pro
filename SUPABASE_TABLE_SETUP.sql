@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS evite_events (
   description TEXT DEFAULT '',
   template TEXT DEFAULT 'classic',
   guests JSONB DEFAULT '[]'::jsonb,
+  use_custom_images BOOLEAN DEFAULT false,
+  custom_style TEXT,
+  custom_images JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -38,4 +41,26 @@ CREATE INDEX IF NOT EXISTS idx_evite_events_id ON evite_events(id);
 
 -- Create index on created_at for sorting
 CREATE INDEX IF NOT EXISTS idx_evite_events_created_at ON evite_events(created_at DESC);
+
+-- If table already exists, add missing columns
+DO $$ 
+BEGIN
+  -- Add use_custom_images column if it doesn't exist
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'evite_events' AND column_name = 'use_custom_images') THEN
+    ALTER TABLE evite_events ADD COLUMN use_custom_images BOOLEAN DEFAULT false;
+  END IF;
+  
+  -- Add custom_style column if it doesn't exist
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'evite_events' AND column_name = 'custom_style') THEN
+    ALTER TABLE evite_events ADD COLUMN custom_style TEXT;
+  END IF;
+  
+  -- Add custom_images column if it doesn't exist
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'evite_events' AND column_name = 'custom_images') THEN
+    ALTER TABLE evite_events ADD COLUMN custom_images JSONB DEFAULT '[]'::jsonb;
+  END IF;
+END $$;
 

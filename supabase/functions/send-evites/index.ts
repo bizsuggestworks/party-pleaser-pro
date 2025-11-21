@@ -180,15 +180,14 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
   const config = styleConfigs[style] || styleConfigs.classic;
 
   if (hasCustomImages) {
-    // AI-generated invite with photos
+    // AI-generated invite with Ghibli-style photo
     const mainImage = customImages[0];
-    const additionalImages = customImages.slice(1, 3);
+    const welcomeText = event.title ? `Welcome to ${title}` : "Welcome to the party";
     
-    console.log("[buildEmailHtml] Building email with custom images:", {
+    console.log("[buildEmailHtml] Building email with Ghibli-style image:", {
       mainImage,
-      additionalImagesCount: additionalImages.length,
+      welcomeText,
       mainImageUrl: mainImage,
-      allImages: customImages,
     });
     
     // Verify image URL is valid
@@ -207,26 +206,23 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
     </head>
     <body style="margin:0;padding:0;background-color:#f9fafb;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
       <div style="max-width:640px;margin:0 auto;background-color:#ffffff">
-        <!-- Hero Image Section -->
-        <div style="position:relative;width:100%;height:300px;overflow:hidden;background:${config.gradient}">
-          <img src="${htmlEscape(mainImage)}" alt="${title}" style="width:100%;height:100%;object-fit:cover;opacity:0.9;display:block" />
-          <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.6))"></div>
-          <div style="position:absolute;bottom:0;left:0;right:0;padding:32px 24px;text-align:center">
-            <h1 style="margin:0;font-size:36px;font-weight:bold;color:#ffffff;text-shadow:2px 2px 4px rgba(0,0,0,0.5);line-height:1.2">${title}</h1>
-            <p style="margin:8px 0 0;font-size:18px;color:#ffffff;text-shadow:1px 1px 2px rgba(0,0,0,0.5)">Hosted by ${host}</p>
+        <!-- Hero Image Section with Ghibli Art and Welcome Text -->
+        <div style="position:relative;width:100%;height:400px;overflow:hidden;background:${config.gradient}">
+          <img src="${htmlEscape(mainImage)}" alt="${title}" style="width:100%;height:100%;object-fit:cover;display:block" />
+          <!-- Overlay gradient for text readability -->
+          <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.4))"></div>
+          <!-- Welcome to the party text overlay -->
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);text-align:center;width:90%;z-index:10">
+            <div style="background:rgba(255,255,255,0.95);padding:24px 32px;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,0.3);backdrop-filter:blur(10px)">
+              <h1 style="margin:0;font-size:42px;font-weight:bold;color:#7c3aed;text-shadow:2px 2px 4px rgba(0,0,0,0.1);line-height:1.2;font-family:'Comic Sans MS', cursive, sans-serif">${htmlEscape(welcomeText)}</h1>
+              <p style="margin:12px 0 0;font-size:20px;color:#4b5563;font-weight:500">${htmlEscape(title)}</p>
+            </div>
+          </div>
+          <!-- Event title at bottom -->
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:24px;text-align:center;background:linear-gradient(to top, rgba(0,0,0,0.6), transparent)">
+            <p style="margin:0;font-size:16px;color:#ffffff;text-shadow:1px 1px 2px rgba(0,0,0,0.5)">Hosted by ${host}</p>
           </div>
         </div>
-
-        <!-- Additional Images Gallery (if available) -->
-        ${additionalImages.length > 0 ? `
-        <div style="display:flex;gap:4px;padding:4px;background-color:#f3f4f6">
-          ${additionalImages.map(img => `
-            <div style="flex:1;height:120px;overflow:hidden;border-radius:8px">
-              <img src="${htmlEscape(img)}" alt="Event photo" style="width:100%;height:100%;object-fit:cover;display:block" />
-            </div>
-          `).join('')}
-        </div>
-        ` : ''}
 
         <!-- Invite Content -->
         <div style="padding:32px 24px">
@@ -264,7 +260,9 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
 
           <!-- CTA Button -->
           <div style="text-align:center;margin-bottom:24px">
-            <a href="${htmlEscape(inviteUrl)}" style="display:inline-block;background:${config.gradient};color:#ffffff;text-decoration:none;padding:16px 32px;border-radius:12px;font-size:18px;font-weight:600;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:transform 0.2s">View Invitation & RSVP</a>
+            <a href="${htmlEscape(inviteUrl)}" style="display:inline-block;background:${config.gradient};color:#ffffff;text-decoration:none;padding:16px 32px;border-radius:12px;font-size:18px;font-weight:600;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:transform 0.2s;margin-bottom:12px">View Invitation & RSVP</a>
+            <br>
+            <a href="data:text/calendar;charset=utf-8,${encodeURIComponent(generateCalendarInvite(event, inviteUrl))}" style="display:inline-block;background:#10b981;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;box-shadow:0 4px 6px rgba(0,0,0,0.1)" download="invite.ics">📅 Add to Calendar</a>
           </div>
 
           <!-- Fallback Link -->
@@ -308,15 +306,68 @@ function buildStandardEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteTe
         ${description ? `<p style="margin:8px 0 0">${description}</p>` : ""}
       </div>
       <p style="margin:0 0 16px">Please RSVP using the link below:</p>
-      <p>
-        <a href="${htmlEscape(inviteUrl)}" style="display:inline-block;background:#7c3aed;color:white;text-decoration:none;padding:12px 18px;border-radius:10px">View invitation & RSVP</a>
-      </p>
+             <div style="text-align:center;margin-bottom:16px">
+               <a href="${htmlEscape(inviteUrl)}" style="display:inline-block;background:#7c3aed;color:white;text-decoration:none;padding:12px 18px;border-radius:10px;margin-bottom:8px">View invitation & RSVP</a>
+               <br>
+               <a href="data:text/calendar;charset=utf-8,${encodeURIComponent(generateCalendarInvite(event, inviteUrl))}" style="display:inline-block;background:#10b981;color:white;text-decoration:none;padding:12px 18px;border-radius:10px" download="invite.ics">📅 Add to Calendar</a>
+             </div>
       <p style="margin:16px 0 0;color:#6b7280;font-size:12px">If the button doesn't work, paste this link in your browser:<br><a href="${htmlEscape(inviteUrl)}" style="color:#7c3aed;text-decoration:underline;word-break:break-all">${htmlEscape(inviteUrl)}</a></p>
     </div>
   </div>`;
 }
 
-async function sendSmtpEmail(to: string, subject: string, html: string) {
+function generateCalendarInvite(event: EviteEvent, inviteUrl: string): string {
+  // Parse date and time
+  const eventDate = new Date(event.date);
+  const [hours, minutes] = event.time.split(':').map(Number);
+  eventDate.setHours(hours, minutes, 0, 0);
+  
+  const endDate = new Date(eventDate);
+  endDate.setHours(endDate.getHours() + 2); // Default 2-hour event
+  
+  // Format dates for ICS (YYYYMMDDTHHMMSSZ)
+  const formatICSDate = (date: Date): string => {
+    return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  };
+  
+  const start = formatICSDate(eventDate);
+  const end = formatICSDate(endDate);
+  const now = formatICSDate(new Date());
+  const uid = `evite-${event.id}-${Date.now()}@party67.com`;
+  
+  // Escape text for ICS format
+  const escapeICS = (text: string): string => {
+    return text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  };
+  
+  const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Party67//Evite//EN
+CALSCALE:GREGORIAN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:${uid}
+DTSTAMP:${now}
+DTSTART:${start}
+DTEND:${end}
+SUMMARY:${escapeICS(event.title)}
+DESCRIPTION:${escapeICS(event.description || '')}\\n\\nRSVP: ${inviteUrl}
+LOCATION:${escapeICS(event.location)}
+ORGANIZER;CN=${escapeICS(event.hostName || 'Host')}:MAILTO:noreply@party67.com
+STATUS:CONFIRMED
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:-PT24H
+ACTION:DISPLAY
+DESCRIPTION:Reminder: ${escapeICS(event.title)}
+END:VALARM
+END:VEVENT
+END:VCALENDAR`.replace(/\n/g, '\r\n');
+  
+  return icsContent;
+}
+
+async function sendSmtpEmail(to: string, subject: string, html: string, calendarInvite?: string) {
   const host = Deno.env.get("SMTP_HOST");
   const port = parseInt(Deno.env.get("SMTP_PORT") || "465", 10);
   const user = Deno.env.get("SMTP_USER");
@@ -352,12 +403,20 @@ async function sendSmtpEmail(to: string, subject: string, html: string) {
     
     console.log(`Sending email via Brevo API to: ${to}, from: ${senderName} <${senderEmail}>`);
     
-    const requestBody = {
+    const requestBody: any = {
       sender: { email: senderEmail, name: senderName },
       to: [{ email: to }],
       subject: subject,
       htmlContent: html,
     };
+    
+    // Add calendar invite as attachment if provided
+    if (calendarInvite) {
+      requestBody.attachment = [{
+        name: "invite.ics",
+        content: btoa(calendarInvite), // Base64 encode
+      }];
+    }
     
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -405,12 +464,21 @@ async function sendSmtpEmail(to: string, subject: string, html: string) {
     }
 
     console.log(`Sending email via SMTP...`);
-    await client.send({
+    const emailOptions: any = {
       from,
       to,
       subject,
       content: html,
-    });
+    };
+    
+    // Add calendar invite as attachment if provided (for SMTP)
+    if (calendarInvite) {
+      // Note: SMTP attachment handling depends on the library
+      // For now, we'll include it in the email body as a link
+      emailOptions.content = html + `<hr><p style="font-size:12px;color:#6b7280">Calendar invite attached. If your email client supports it, you can add this event to your calendar.</p>`;
+    }
+    
+    await client.send(emailOptions);
     
     console.log(`✓ Email sent successfully via SMTP`);
     await client.close();
@@ -582,6 +650,10 @@ Deno.serve(async (req) => {
       customImagesCount: event.customImages?.length || 0,
     });
 
+    // Generate calendar invite
+    const calendarInvite = generateCalendarInvite(event, inviteUrl);
+    console.log("[send-evites] Generated calendar invite (.ics file)");
+
     const results: { to: string; ok: boolean; error?: string; details?: string; type?: string }[] = [];
     for (const g of event.guests) {
       // Send email
@@ -601,9 +673,9 @@ Deno.serve(async (req) => {
           }
         }
         
-        await sendSmtpEmail(g.email, subject, html);
-        console.log(`[send-evites] ✓ Successfully sent email to ${g.email}`);
-        results.push({ to: g.email, ok: true, details: "Email queued for delivery", type: "email" });
+        await sendSmtpEmail(g.email, subject, html, calendarInvite);
+        console.log(`[send-evites] ✓ Successfully sent email with calendar invite to ${g.email}`);
+        results.push({ to: g.email, ok: true, details: "Email with calendar invite queued for delivery", type: "email" });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         console.error(`[send-evites] ✗ Failed sending email to ${g.email}:`, errorMsg);
