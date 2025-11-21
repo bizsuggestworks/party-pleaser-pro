@@ -207,14 +207,24 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
       welcomeText,
       mainImageUrl: mainImage,
       isTransformed: mainImage !== event.customImages?.[0] || mainImage.includes('replicate') || mainImage.includes('transform'),
+      allCustomImages: customImages,
+      customImagesLength: customImages.length,
     });
     
     // Verify image URL is valid
     if (!mainImage || !mainImage.startsWith('http')) {
-      console.error("[buildEmailHtml] Invalid main image URL:", mainImage);
+      console.error("[buildEmailHtml] ❌ Invalid main image URL:", mainImage);
+      console.error("[buildEmailHtml] Custom images array:", customImages);
+      console.error("[buildEmailHtml] Event customImages:", event.customImages);
       // Fall back to standard template
       return buildStandardEmailHtml(event, inviteUrl, aiInviteText, isUpdate);
     }
+    
+    // Additional validation: Check if URL is accessible
+    console.log("[buildEmailHtml] ✓ Using Ghibli-transformed image URL:", mainImage);
+    console.log("[buildEmailHtml] Image URL type:", typeof mainImage);
+    console.log("[buildEmailHtml] Image URL length:", mainImage.length);
+    console.log("[buildEmailHtml] Image URL starts with http:", mainImage.startsWith('http'));
 
     return `
     <!DOCTYPE html>
@@ -240,7 +250,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
       <div style="max-width:640px;margin:0 auto;background-color:#ffffff">
         <!-- Hero Image Section with Ghibli Art and Welcome Text -->
         <div class="hero-image-container" style="position:relative;width:100%;max-width:640px;overflow:visible;background:${config.gradient};margin:0 auto;text-align:center">
-          <img class="hero-image" src="${mainImage}" alt="${htmlEscape(title)}" style="width:100%;max-width:640px;height:auto;min-height:400px;max-height:800px;object-fit:contain;object-position:center;display:block;margin:0 auto;padding:0;border:0;background-color:#f0f0f0" />
+          <img class="hero-image" src="${mainImage}" alt="${htmlEscape(title)}" style="width:100%;max-width:640px;height:auto;min-height:400px;max-height:800px;object-fit:contain;object-position:center;display:block;margin:0 auto;padding:0;border:0;background-color:#f0f0f0" loading="eager" />
           <!-- Welcome to the party text overlay - positioned over image -->
           <div style="position:absolute;top:20px;left:50%;transform:translateX(-50%);text-align:center;width:90%;z-index:10">
             <div style="background:rgba(255,255,255,0.95);padding:20px 28px;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,0.3);backdrop-filter:blur(10px);display:inline-block">

@@ -665,6 +665,9 @@ export default function Evite() {
         customImagesCount: eventToSend.customImages?.length || 0,
         customStyle: eventToSend.customStyle,
         guestsCount: eventToSend.guests.length,
+        firstImageUrl: eventToSend.customImages?.[0],
+        firstImageUrlType: typeof eventToSend.customImages?.[0],
+        isGhibliImage: eventToSend.customImages?.[0]?.includes('replicate') || eventToSend.customImages?.[0]?.includes('transform'),
       });
       
       const { data, error } = await supabase.functions.invoke("send-evites", {

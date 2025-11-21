@@ -33,15 +33,8 @@ Deno.serve(async (req) => {
 
     console.log("[transform-image] Transforming image to Ghibli style:", imageUrl);
 
-    // Fetch the original image to verify it's accessible
-    // Note: We don't need to convert to base64 since Replicate accepts URLs directly
-    const imageResponse = await fetch(imageUrl, { method: 'HEAD' });
-    if (!imageResponse.ok) {
-      console.warn(`[transform-image] Image HEAD check failed: ${imageResponse.status}, but continuing with URL`);
-      // Don't throw - Replicate might still be able to fetch it
-    }
-
     // Use Replicate API for Ghibli style transformation
+    // Note: Replicate accepts image URLs directly, so we don't need to fetch or convert the image
     const replicateApiKey = Deno.env.get("REPLICATE_API_TOKEN");
     
     let transformedImageUrl = imageUrl; // Fallback to original if transformation fails
@@ -62,8 +55,9 @@ Deno.serve(async (req) => {
           num_inference_steps: 38,
         };
         
-        console.log("[transform-image] Calling Replicate API with model:", "aaronaftab/mirage-ghibli");
-        console.log("[transform-image] Input:", JSON.stringify(modelInput, null, 2));
+        console.log("[transform-image] Calling Replicate API with model: aaronaftab/mirage-ghibli");
+        // Avoid JSON.stringify on large objects to prevent stack overflow
+        console.log("[transform-image] Input image URL:", imageUrl);
         
         const replicateResponse = await fetch("https://api.replicate.com/v1/predictions", {
           method: "POST",
@@ -106,7 +100,9 @@ Deno.serve(async (req) => {
           
           if (result.status === "succeeded") {
             console.log("[transform-image] Transformation succeeded! Processing output...");
-            console.log("[transform-image] Raw output:", JSON.stringify(result.output, null, 2));
+            // Avoid JSON.stringify on potentially large objects
+            console.log("[transform-image] Output type:", typeof result.output);
+            console.log("[transform-image] Output is array:", Array.isArray(result.output));
             
             if (result.output) {
               // According to Replicate API: output is an array where output[0] has a .url() method
@@ -131,8 +127,8 @@ Deno.serve(async (req) => {
                   } else {
                     // Log the structure to understand what we're getting
                     console.warn("[transform-image] Array item is object but no URL found");
-                    console.warn("[transform-image] Object keys:", Object.keys(firstOutput));
-                    console.warn("[transform-image] Object structure:", JSON.stringify(firstOutput, null, 2));
+                    console.warn("[transform-image] Object keys:", Object.keys(firstOutput).join(', '));
+                    // Avoid JSON.stringify to prevent stack overflow
                   }
                 }
                 // Fallback: try to convert to string
@@ -162,7 +158,64 @@ Deno.serve(async (req) => {
               if (transformedImageUrl && transformedImageUrl !== imageUrl && transformedImageUrl.startsWith('http')) {
                 console.log("[transform-image] ✓✓✓ Image transformed to Ghibli style successfully! ✓✓✓");
                 console.log("[transform-image] Original URL:", imageUrl);
-                console.log("[transform-image] Transformed URL:", transformedImageUrl);
+                console.log("[transform-image] Transformed URL from Replicate:", transformedImageUrl);
+                
+                // Download the transformed image and upload to Supabase Storage for permanent access
+                try {
+                  console.log("[transform-image] Downloading transformed image from Replicate...");
+                  const transformedImageResponse = await fetch(transformedImageUrl);
+                  if (!transformedImageResponse.ok) {
+                    throw new Error(`Failed to download transformed image: ${transformedImageResponse.status}`);
+                  }
+                  
+                  const transformedImageBlob = await transformedImageResponse.blob();
+                  console.log("[transform-image] Downloaded transformed image, size:", transformedImageBlob.size, "bytes");
+                  
+                  // Upload to Supabase Storage using REST API
+                  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+                  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+                  
+                  if (!supabaseUrl || !supabaseServiceKey) {
+                    console.warn("[transform-image] Supabase credentials not found, returning Replicate URL directly");
+                  } else {
+                    const timestamp = Date.now();
+                    const storagePath = `evite-uploads/transformed/ghibli_${timestamp}.webp`;
+                    
+                    console.log("[transform-image] Uploading transformed image to Supabase Storage:", storagePath);
+                    
+                    // Convert blob to ArrayBuffer for upload
+                    const arrayBuffer = await transformedImageBlob.arrayBuffer();
+                    
+                    // Upload using Supabase Storage REST API
+                    const uploadUrl = `${supabaseUrl}/storage/v1/object/evite-uploads/${storagePath}`;
+                    const uploadResponse = await fetch(uploadUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${supabaseServiceKey}`,
+                        'Content-Type': 'image/webp',
+                        'x-upsert': 'false',
+                        'Cache-Control': '3600',
+                      },
+                      body: arrayBuffer,
+                    });
+                    
+                    if (!uploadResponse.ok) {
+                      const errorText = await uploadResponse.text();
+                      console.warn("[transform-image] Failed to upload to Supabase Storage:", uploadResponse.status, errorText);
+                      console.warn("[transform-image] Using Replicate URL directly (may expire)");
+                    } else {
+                      // Get public URL
+                      const publicUrl = `${supabaseUrl}/storage/v1/object/public/evite-uploads/${storagePath}`;
+                      transformedImageUrl = publicUrl;
+                      console.log("[transform-image] ✓✓✓ Transformed image uploaded to Supabase Storage! ✓✓✓");
+                      console.log("[transform-image] Permanent Supabase URL:", transformedImageUrl);
+                    }
+                  }
+                } catch (storageError) {
+                  console.warn("[transform-image] Error uploading to Supabase Storage:", storageError);
+                  console.warn("[transform-image] Using Replicate URL directly (may expire or be blocked by email clients)");
+                  // Continue with Replicate URL as fallback
+                }
               } else {
                 console.warn("[transform-image] ⚠️ Transformed URL validation failed");
                 console.warn("[transform-image] Transformed URL:", transformedImageUrl);
@@ -171,20 +224,23 @@ Deno.serve(async (req) => {
               }
             } else {
               console.warn("[transform-image] Transformation succeeded but no output URL");
-              console.warn("[transform-image] Full result:", JSON.stringify(result, null, 2));
+              console.warn("[transform-image] Result status:", result.status);
             }
           } else if (result.status === "failed") {
             console.error("[transform-image] Transformation failed with status: failed");
-            console.error("[transform-image] Error object:", JSON.stringify(result.error, null, 2));
             if (result.error) {
-              console.error("[transform-image] Error details:", JSON.stringify(result.error, null, 2));
+              // Avoid JSON.stringify on potentially large error objects
+              console.error("[transform-image] Error type:", typeof result.error);
+              if (typeof result.error === 'string') {
+                console.error("[transform-image] Error message:", result.error);
+              } else if (result.error && typeof result.error === 'object') {
+                console.error("[transform-image] Error keys:", Object.keys(result.error).join(', '));
+              }
             }
-            console.error("[transform-image] Full result:", JSON.stringify(result, null, 2));
           } else {
             console.warn("[transform-image] Transformation incomplete - status:", result.status);
-            console.warn("[transform-image] Result:", JSON.stringify(result, null, 2));
             if (result.error) {
-              console.warn("[transform-image] Error:", JSON.stringify(result.error, null, 2));
+              console.warn("[transform-image] Error type:", typeof result.error);
             }
           }
         } else {
@@ -192,22 +248,20 @@ Deno.serve(async (req) => {
           console.error("[transform-image] ❌ Replicate API error - Status:", replicateResponse.status);
           console.error("[transform-image] Error response body:", errorText);
           
-          // Try to parse error for more details
+          // Try to parse error for more details (limit length to prevent issues)
           try {
             const errorJson = JSON.parse(errorText);
-            console.error("[transform-image] Parsed error JSON:", JSON.stringify(errorJson, null, 2));
+            // Only log error message, not full object to prevent stack overflow
+            if (errorJson.message) {
+              console.error("[transform-image] Error message:", errorJson.message);
+            }
+            if (errorJson.detail) {
+              console.error("[transform-image] Error detail:", errorJson.detail);
+            }
           } catch {
-            // Not JSON, just log the text
-            console.error("[transform-image] Error is not JSON format");
-          }
-          console.error("[transform-image] Error response:", errorText);
-          
-          // Try to parse error for more details
-          try {
-            const errorJson = JSON.parse(errorText);
-            console.error("[transform-image] Parsed error:", JSON.stringify(errorJson, null, 2));
-          } catch {
-            // Not JSON, just log the text
+            // Not JSON, just log a truncated version of the text
+            const truncatedError = errorText.length > 500 ? errorText.substring(0, 500) + '...' : errorText;
+            console.error("[transform-image] Error response (truncated):", truncatedError);
           }
         }
       } catch (replicateError) {
