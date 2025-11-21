@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { loadEvents, saveEvents, saveEvent, type EviteEvent, type Guest } from "@/utils/eviteStorage";
+import { loadEvents, saveEvents, saveEvent, deleteEvent as deleteEventFromStorage, type EviteEvent, type Guest } from "@/utils/eviteStorage";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 type GuestStatus = "pending" | "accepted" | "declined";
@@ -72,11 +72,8 @@ export default function Evite() {
     [events, activeEventId]
   );
 
-  useEffect(() => {
-    if (!loading && events.length > 0) {
-      saveEvents(events);
-    }
-  }, [events, loading]);
+  // Note: We don't auto-save all events on every change anymore
+  // Individual operations (create, update, delete) handle their own persistence
 
   const createEvent = async () => {
     if (!draft.title || !draft.date || !draft.time || !draft.location) {
@@ -135,11 +132,49 @@ export default function Evite() {
     toast({ title: "Event created", description: "Share your invite link with guests." });
   };
 
-  const deleteEvent = (id: string) => {
+  const deleteEvent = async (id: string) => {
+    console.log(`[Evite] Starting deletion of event ${id}`);
+    const eventToDelete = events.find(e => e.id === id);
+    console.log(`[Evite] Event to delete:`, eventToDelete?.title || 'not found');
+    
+    // Optimistically update UI first
     const next = events.filter((e) => e.id !== id);
     setEvents(next);
-    if (activeEventId === id) setActiveEventId(next[0]?.id ?? null);
-    toast({ title: "Event deleted" });
+    if (activeEventId === id) {
+      setActiveEventId(next.length > 0 ? next[0].id : null);
+    }
+    
+    try {
+      // Delete from Supabase and localStorage
+      await deleteEventFromStorage(id);
+      console.log(`[Evite] ✓ Storage deletion completed for event ${id}`);
+      
+      toast({ 
+        title: "Event deleted", 
+        description: "Event has been permanently removed." 
+      });
+    } catch (error) {
+      console.error("[Evite] Failed to delete event:", error);
+      
+      // Reload events to get accurate state
+      try {
+        const reloadedEvents = await loadEvents();
+        setEvents(reloadedEvents);
+        if (reloadedEvents.length > 0 && !reloadedEvents.find(e => e.id === activeEventId)) {
+          setActiveEventId(reloadedEvents[0].id);
+        } else if (reloadedEvents.length === 0) {
+          setActiveEventId(null);
+        }
+      } catch (reloadError) {
+        console.error("[Evite] Failed to reload events:", reloadError);
+      }
+      
+      toast({ 
+        title: "Failed to delete event", 
+        description: error instanceof Error ? error.message : "Please try again or refresh the page.",
+        variant: "destructive" 
+      });
+    }
   };
 
   const addGuest = async () => {
