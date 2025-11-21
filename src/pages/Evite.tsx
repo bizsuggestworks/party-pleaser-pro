@@ -252,19 +252,27 @@ export default function Evite() {
               },
             });
             
+            console.log("[Evite] Transform response:", { transformData, transformError });
+            
             if (transformError) {
               console.warn("[Evite] Image transformation failed, using original:", transformError);
+              console.warn("[Evite] Error details:", JSON.stringify(transformError, null, 2));
               // Use original image if transformation fails
               uploadedUrls.push(pub.publicUrl);
-            } else if (transformData?.transformedImageUrl) {
-              console.log(`[Evite] ✓ Image transformed to Ghibli style:`, transformData.transformedImageUrl);
+            } else if (transformData?.transformedImageUrl && transformData.transformedImageUrl !== pub.publicUrl) {
+              console.log(`[Evite] ✓✓✓ Image transformed to Ghibli style! ✓✓✓`);
+              console.log(`[Evite] Original URL: ${pub.publicUrl}`);
+              console.log(`[Evite] Transformed URL: ${transformData.transformedImageUrl}`);
               uploadedUrls.push(transformData.transformedImageUrl);
             } else {
-              console.warn("[Evite] No transformed image URL returned, using original");
+              console.warn("[Evite] No transformed image URL returned or same as original, using original");
+              console.warn("[Evite] Transform data:", transformData);
               uploadedUrls.push(pub.publicUrl);
             }
           } catch (transformException) {
-            console.warn("[Evite] Transformation exception, using original:", transformException);
+            console.error("[Evite] Transformation exception:", transformException);
+            console.error("[Evite] Exception details:", transformException instanceof Error ? transformException.message : String(transformException));
+            // Use original image if transformation fails
             uploadedUrls.push(pub.publicUrl);
           }
         } catch (uploadException) {

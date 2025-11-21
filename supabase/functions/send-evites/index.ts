@@ -50,12 +50,15 @@ function htmlEscape(input: string) {
     .replace(/'/g, "&#039;");
 }
 
-async function generateAIInviteText(event: EviteEvent): Promise<string> {
+async function generateAIInviteText(event: EviteEvent, guestName?: string): Promise<string> {
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
   
   if (!openaiApiKey) {
     // Fallback to a nice default message if OpenAI is not configured (instant)
-    return `We're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories. We can't wait to share this moment with you.`;
+    const fallback = guestName 
+      ? `Hi ${guestName}, we're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories. We can't wait to share this moment with you.`
+      : `We're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories. We can't wait to share this moment with you.`;
+    return fallback;
   }
 
   // Create a timeout promise that rejects after 3 seconds
@@ -64,14 +67,17 @@ async function generateAIInviteText(event: EviteEvent): Promise<string> {
   });
 
   try {
+    const guestGreeting = guestName ? `Guest name: ${guestName}` : "";
     const prompt = `Create a warm, personalized invitation message for a party event. 
 Event: ${event.title}
 Host: ${event.hostName}
+${guestGreeting}
 Date: ${event.date} at ${event.time}
 Location: ${event.location}
 Description: ${event.description || "A special celebration"}
 
-Write a friendly, enthusiastic invitation message (2-3 sentences) that captures the excitement and makes the recipient feel special. Keep it warm and inviting.`;
+Write a friendly, enthusiastic invitation message (2-3 sentences) that captures the excitement and makes the recipient feel special. Keep it warm and inviting.
+IMPORTANT: Use the actual host name "${event.hostName}" in your message. ${guestName ? `Address the guest by name "${guestName}" at the beginning.` : "Do not use placeholders like [Recipient's name], {Hostname}, or [Hostname]. Use the actual values provided."}`;
 
     const fetchPromise = fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -105,9 +111,18 @@ Write a friendly, enthusiastic invitation message (2-3 sentences) that captures 
     }
 
     const data = await response.json();
-    const aiMessage = data.choices?.[0]?.message?.content?.trim();
+    let aiMessage = data.choices?.[0]?.message?.content?.trim();
     
     if (aiMessage) {
+      // Replace any remaining placeholders with actual values
+      aiMessage = aiMessage
+        .replace(/\[Recipient'?s?\s+name\]/gi, guestName || "there")
+        .replace(/\{Recipient'?s?\s+name\}/gi, guestName || "there")
+        .replace(/\[Hostname\]/gi, event.hostName || "your host")
+        .replace(/\{Hostname\}/gi, event.hostName || "your host")
+        .replace(/\[Host\s+name\]/gi, event.hostName || "your host")
+        .replace(/\{Host\s+name\}/gi, event.hostName || "your host");
+      
       return aiMessage;
     }
   } catch (error) {
@@ -115,7 +130,10 @@ Write a friendly, enthusiastic invitation message (2-3 sentences) that captures 
   }
 
   // Fallback message (instant return)
-  return `We're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories. We can't wait to share this moment with you.`;
+  const fallback = guestName 
+    ? `Hi ${guestName}, we're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories. We can't wait to share this moment with you.`
+    : `We're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories. We can't wait to share this moment with you.`;
+  return fallback;
 }
 
 function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: string) {
@@ -188,6 +206,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
       mainImage,
       welcomeText,
       mainImageUrl: mainImage,
+      isTransformed: mainImage !== event.customImages?.[0] || mainImage.includes('replicate') || mainImage.includes('transform'),
     });
     
     // Verify image URL is valid
@@ -203,12 +222,23 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        @media only screen and (max-width: 600px) {
+          .hero-image-container {
+            height: 300px !important;
+          }
+          .hero-image {
+            height: 300px !important;
+            max-height: 300px !important;
+          }
+        }
+      </style>
     </head>
     <body style="margin:0;padding:0;background-color:#f9fafb;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
       <div style="max-width:640px;margin:0 auto;background-color:#ffffff">
         <!-- Hero Image Section with Ghibli Art and Welcome Text -->
-        <div style="position:relative;width:100%;height:400px;overflow:hidden;background:${config.gradient}">
-          <img src="${htmlEscape(mainImage)}" alt="${title}" style="width:100%;height:100%;object-fit:cover;display:block" />
+        <div class="hero-image-container" style="position:relative;width:100%;max-width:640px;height:400px;overflow:hidden;background:${config.gradient};margin:0 auto">
+          <img class="hero-image" src="${htmlEscape(mainImage)}" alt="${title}" style="width:100%;max-width:640px;height:400px;object-fit:cover;object-position:center;display:block;margin:0;padding:0;border:0" />
           <!-- Overlay gradient for text readability -->
           <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.4))"></div>
           <!-- Welcome to the party text overlay -->
@@ -625,23 +655,7 @@ Deno.serve(async (req) => {
       guestsCount: event.guests.length,
     });
 
-    // Generate AI invite text if custom images are available (with timeout protection)
-    let aiInviteText: string | undefined;
-    if (event.useCustomImages && event.customImages && event.customImages.length > 0) {
-      try {
-        console.log("[send-evites] Generating AI invite text for event with custom images...");
-        console.log("[send-evites] Custom images URLs:", event.customImages);
-        // Generate AI text (has 3-second timeout, falls back instantly if slow)
-        aiInviteText = await generateAIInviteText(event);
-        console.log("[send-evites] ✓ AI invite text generated successfully");
-      } catch (err) {
-        console.warn("[send-evites] Failed to generate AI invite text, using fallback:", err);
-        // Fallback is already handled in generateAIInviteText, but ensure we have text
-        aiInviteText = undefined; // Will use default in buildEmailHtml
-      }
-    } else {
-      console.log("[send-evites] No custom images found. useCustomImages:", event.useCustomImages, "customImages:", event.customImages);
-    }
+    // Note: AI invite text will be generated per-guest for personalization
 
     // Verify event has custom images before sending
     console.log("[send-evites] Final verification before sending emails:", {
@@ -660,7 +674,21 @@ Deno.serve(async (req) => {
       try {
         console.log(`[send-evites] Processing email for guest: ${g.name} (${g.email})`);
         const subject = `You're invited: ${event.title}`;
-        const html = buildEmailHtml(event, inviteUrl, aiInviteText);
+        
+        // Generate personalized AI invite text for this guest
+        let personalizedAiText: string | undefined;
+        if (event.useCustomImages && event.customImages && event.customImages.length > 0) {
+          try {
+            console.log(`[send-evites] Generating personalized AI invite text for ${g.name}...`);
+            personalizedAiText = await generateAIInviteText(event, g.name);
+            console.log(`[send-evites] ✓ Personalized AI text generated for ${g.name}`);
+          } catch (err) {
+            console.warn(`[send-evites] Failed to generate AI text for ${g.name}, using fallback:`, err);
+            personalizedAiText = undefined;
+          }
+        }
+        
+        const html = buildEmailHtml(event, inviteUrl, personalizedAiText);
         
         // Log a snippet of the HTML to verify images are included
         if (event.useCustomImages && event.customImages && event.customImages.length > 0) {
