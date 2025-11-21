@@ -243,6 +243,7 @@ export default function Evite() {
     }
     try {
       // Reload the event from storage to ensure we have the latest data including custom images
+      // This is a quick operation (usually < 100ms)
       const latestEvent = await loadEvent(activeEvent.id);
       const eventToSend = latestEvent || activeEvent;
       

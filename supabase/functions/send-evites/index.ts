@@ -54,9 +54,14 @@ async function generateAIInviteText(event: EviteEvent): Promise<string> {
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
   
   if (!openaiApiKey) {
-    // Fallback to a nice default message if OpenAI is not configured
+    // Fallback to a nice default message if OpenAI is not configured (instant)
     return `We're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories. We can't wait to share this moment with you.`;
   }
+
+  // Create a timeout promise that rejects after 3 seconds
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("AI generation timeout")), 3000);
+  });
 
   try {
     const prompt = `Create a warm, personalized invitation message for a party event. 
@@ -68,7 +73,7 @@ Description: ${event.description || "A special celebration"}
 
 Write a friendly, enthusiastic invitation message (2-3 sentences) that captures the excitement and makes the recipient feel special. Keep it warm and inviting.`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const fetchPromise = fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${openaiApiKey}`,
@@ -91,6 +96,9 @@ Write a friendly, enthusiastic invitation message (2-3 sentences) that captures 
       }),
     });
 
+    // Race between fetch and timeout
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+
     if (!response.ok) {
       console.warn("OpenAI API error, using fallback message");
       throw new Error("OpenAI API error");
@@ -103,10 +111,10 @@ Write a friendly, enthusiastic invitation message (2-3 sentences) that captures 
       return aiMessage;
     }
   } catch (error) {
-    console.warn("Failed to generate AI invite text:", error);
+    console.warn("Failed to generate AI invite text (using fallback):", error instanceof Error ? error.message : error);
   }
 
-  // Fallback message
+  // Fallback message (instant return)
   return `We're thrilled to invite you to join us for ${event.title}! This will be a special celebration filled with joy, laughter, and wonderful memories. We can't wait to share this moment with you.`;
 }
 
@@ -514,16 +522,19 @@ Deno.serve(async (req) => {
       guestsCount: event.guests.length,
     });
 
-    // Generate AI invite text if custom images are available
+    // Generate AI invite text if custom images are available (with timeout protection)
     let aiInviteText: string | undefined;
     if (event.useCustomImages && event.customImages && event.customImages.length > 0) {
       try {
         console.log("[send-evites] Generating AI invite text for event with custom images...");
         console.log("[send-evites] Custom images URLs:", event.customImages);
+        // Generate AI text (has 3-second timeout, falls back instantly if slow)
         aiInviteText = await generateAIInviteText(event);
         console.log("[send-evites] ✓ AI invite text generated successfully");
       } catch (err) {
         console.warn("[send-evites] Failed to generate AI invite text, using fallback:", err);
+        // Fallback is already handled in generateAIInviteText, but ensure we have text
+        aiInviteText = undefined; // Will use default in buildEmailHtml
       }
     } else {
       console.log("[send-evites] No custom images found. useCustomImages:", event.useCustomImages, "customImages:", event.customImages);
