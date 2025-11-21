@@ -225,11 +225,13 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
       <style>
         @media only screen and (max-width: 600px) {
           .hero-image-container {
-            height: 300px !important;
+            min-height: 300px !important;
+            height: auto !important;
           }
           .hero-image {
-            height: 300px !important;
-            max-height: 300px !important;
+            min-height: 300px !important;
+            max-height: 500px !important;
+            height: auto !important;
           }
         }
       </style>
@@ -237,20 +239,17 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
     <body style="margin:0;padding:0;background-color:#f9fafb;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
       <div style="max-width:640px;margin:0 auto;background-color:#ffffff">
         <!-- Hero Image Section with Ghibli Art and Welcome Text -->
-        <div class="hero-image-container" style="position:relative;width:100%;max-width:640px;height:400px;overflow:hidden;background:${config.gradient};margin:0 auto">
-          <img class="hero-image" src="${mainImage}" alt="${htmlEscape(title)}" style="width:100%;max-width:640px;height:400px;object-fit:cover;object-position:center;display:block;margin:0;padding:0;border:0;background-color:#f0f0f0" />
-          <!-- Overlay gradient for text readability -->
-          <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.4))"></div>
-          <!-- Welcome to the party text overlay -->
-          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);text-align:center;width:90%;z-index:10">
-            <div style="background:rgba(255,255,255,0.95);padding:24px 32px;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,0.3);backdrop-filter:blur(10px)">
-              <h1 style="margin:0;font-size:42px;font-weight:bold;color:#7c3aed;text-shadow:2px 2px 4px rgba(0,0,0,0.1);line-height:1.2;font-family:'Comic Sans MS', cursive, sans-serif">${htmlEscape(welcomeText)}</h1>
-              <p style="margin:12px 0 0;font-size:20px;color:#4b5563;font-weight:500">${htmlEscape(title)}</p>
+        <div class="hero-image-container" style="position:relative;width:100%;max-width:640px;overflow:visible;background:${config.gradient};margin:0 auto;text-align:center">
+          <img class="hero-image" src="${mainImage}" alt="${htmlEscape(title)}" style="width:100%;max-width:640px;height:auto;min-height:400px;max-height:800px;object-fit:contain;object-position:center;display:block;margin:0 auto;padding:0;border:0;background-color:#f0f0f0" />
+          <!-- Welcome to the party text overlay - positioned over image -->
+          <div style="position:absolute;top:20px;left:50%;transform:translateX(-50%);text-align:center;width:90%;z-index:10">
+            <div style="background:rgba(255,255,255,0.95);padding:20px 28px;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,0.3);backdrop-filter:blur(10px);display:inline-block">
+              <h1 style="margin:0;font-size:36px;font-weight:bold;color:#7c3aed;text-shadow:2px 2px 4px rgba(0,0,0,0.1);line-height:1.2;font-family:'Comic Sans MS', cursive, sans-serif">${htmlEscape(welcomeText)}</h1>
             </div>
           </div>
-          <!-- Event title at bottom -->
-          <div style="position:absolute;bottom:0;left:0;right:0;padding:24px;text-align:center;background:linear-gradient(to top, rgba(0,0,0,0.6), transparent)">
-            <p style="margin:0;font-size:16px;color:#ffffff;text-shadow:1px 1px 2px rgba(0,0,0,0.5)">Hosted by ${host}</p>
+          <!-- Event title at bottom - only if image is tall enough -->
+          <div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 20px;text-align:center;background:rgba(0,0,0,0.7);border-radius:12px;backdrop-filter:blur(5px)">
+            <p style="margin:0;font-size:14px;color:#ffffff;text-shadow:1px 1px 2px rgba(0,0,0,0.5)">Hosted by ${host}</p>
           </div>
         </div>
 
