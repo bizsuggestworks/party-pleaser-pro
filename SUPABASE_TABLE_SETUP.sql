@@ -3,6 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS evite_events (
   id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   host_name TEXT NOT NULL,
   date TEXT NOT NULL,
@@ -62,5 +63,30 @@ BEGIN
                  WHERE table_name = 'evite_events' AND column_name = 'custom_images') THEN
     ALTER TABLE evite_events ADD COLUMN custom_images JSONB DEFAULT '[]'::jsonb;
   END IF;
+  
+  -- Add user_id column if it doesn't exist
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'evite_events' AND column_name = 'user_id') THEN
+    ALTER TABLE evite_events ADD COLUMN user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
 END $$;
+
+-- Create index on user_id for faster filtering
+CREATE INDEX IF NOT EXISTS idx_evite_events_user_id ON evite_events(user_id);
+
+-- Update RLS policies to allow users to manage their own events
+DROP POLICY IF EXISTS "Allow public insert" ON evite_events;
+CREATE POLICY "Allow authenticated users to insert their events" ON evite_events
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Allow public update" ON evite_events;
+CREATE POLICY "Allow users to update their own events or public update for RSVPs" ON evite_events
+  FOR UPDATE
+  USING (auth.uid() = user_id OR true); -- Users can update their own events, or anyone can update (for RSVPs)
+
+DROP POLICY IF EXISTS "Allow public read access" ON evite_events;
+CREATE POLICY "Allow public read access" ON evite_events
+  FOR SELECT
+  USING (true); -- Keep public read for invite links
 

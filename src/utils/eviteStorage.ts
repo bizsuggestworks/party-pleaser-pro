@@ -23,6 +23,7 @@ export interface Guest {
 
 export interface EviteEvent {
   id: string;
+  userId?: string; // User ID who created the event
   title: string;
   hostName: string;
   date: string;
@@ -62,6 +63,7 @@ export async function loadEvent(id: string): Promise<EviteEvent | null> {
       console.log(`[eviteStorage] Event found in Supabase:`, data);
       return {
         id: data.id,
+        userId: data.user_id || undefined,
         title: data.title,
         hostName: data.host_name,
         date: data.date,
@@ -117,13 +119,21 @@ if (typeof window !== 'undefined') {
 }
 
 // Load all events from Supabase, fallback to localStorage
-export async function loadEvents(): Promise<EviteEvent[]> {
+// If userId is provided, only load events for that user
+export async function loadEvents(userId?: string): Promise<EviteEvent[]> {
   try {
     // Try Supabase first
-    const { data, error } = await (supabase as any)
+    let query = (supabase as any)
       .from("evite_events")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("*");
+    
+    // Filter by user ID if provided
+    if (userId) {
+      query = query.eq("user_id", userId);
+      console.log(`[eviteStorage] Loading events for user: ${userId}`);
+    }
+    
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (!error && data && Array.isArray(data)) {
       console.log(`[eviteStorage] Loaded ${data.length} events from Supabase`);
@@ -140,6 +150,7 @@ export async function loadEvents(): Promise<EviteEvent[]> {
         })
         .map((e: any) => ({
           id: e.id,
+          userId: e.user_id || undefined,
           title: e.title,
           hostName: e.host_name,
           date: e.date,
@@ -211,6 +222,7 @@ export async function saveEvent(event: EviteEvent): Promise<void> {
       .from("evite_events")
       .upsert({
         id: event.id,
+        user_id: event.userId || null,
         title: event.title,
         host_name: event.hostName,
         date: event.date,

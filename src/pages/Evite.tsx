@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { Calendar, Copy, Mail, Plus, Trash2, Users, ClipboardCheck, Palette, Mes
 import { supabase } from "@/integrations/supabase/client";
 import { loadEvents, loadEvent, saveEvents, saveEvent, deleteEvent as deleteEventFromStorage, type EviteEvent, type Guest } from "@/utils/eviteStorage";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { LoginScreen } from "@/components/LoginScreen";
 
 type GuestStatus = "pending" | "accepted" | "declined";
 
@@ -26,18 +28,24 @@ const TEMPLATES = [
 export default function Evite() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
   const [tab, setTab] = useState("create");
 
   const [events, setEvents] = useState<EviteEvent[]>([]);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLogin, setShowLogin] = useState(false);
 
-  // Load events from Supabase on mount
+  // Load events from Supabase on mount (filtered by user ID)
   useEffect(() => {
     async function fetchEvents() {
+      if (authLoading) {
+        return; // Wait for auth to load
+      }
+      
       try {
-        console.log("[Evite] Loading events...");
-        const loadedEvents = await loadEvents();
+        console.log("[Evite] Loading events for user:", user?.id || "not logged in");
+        const loadedEvents = await loadEvents(user?.id);
         console.log(`[Evite] Loaded ${loadedEvents.length} events:`, loadedEvents.map(e => ({ id: e.id, title: e.title, hasImages: !!e.customImages?.length })));
         setEvents(loadedEvents);
         if (loadedEvents.length > 0 && !activeEventId) {
@@ -46,11 +54,15 @@ export default function Evite() {
         }
       } catch (error) {
         console.error("[Evite] Failed to load events:", error);
-        // Try to load from localStorage as fallback
+        // Try to load from localStorage as fallback (filtered by user ID)
         try {
           const raw = localStorage.getItem("partyify-evite-events");
           if (raw) {
-            const localEvents = JSON.parse(raw);
+            const allLocalEvents = JSON.parse(raw) as EviteEvent[];
+            // Filter by user ID if logged in
+            const localEvents = user?.id 
+              ? allLocalEvents.filter(e => e.userId === user.id)
+              : allLocalEvents.filter(e => !e.userId); // Show events without userId for backward compatibility
             console.log(`[Evite] Loaded ${localEvents.length} events from localStorage fallback`);
             setEvents(localEvents);
             if (localEvents.length > 0 && !activeEventId) {
@@ -65,7 +77,7 @@ export default function Evite() {
       }
     }
     fetchEvents();
-  }, []);
+  }, [user?.id, authLoading]);
 
   const [draft, setDraft] = useState<Omit<EviteEvent, "id" | "guests" | "createdAt">>({
     title: "",
@@ -136,6 +148,16 @@ export default function Evite() {
   // Individual operations (create, update, delete) handle their own persistence
 
   const createEvent = async () => {
+    // Check if user is logged in
+    if (!user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to create events. Your events will be saved to your account.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (!draft.title || !draft.date || !draft.time || !draft.location) {
       toast({
         title: "Missing details",
@@ -151,6 +173,7 @@ export default function Evite() {
     
     const eventData: EviteEvent = {
       id,
+      userId: user.id, // Associate event with user ID
       ...draft,
       // Preserve existing guests and images when updating
       guests: isUpdating ? (activeEvent?.guests || []) : [],
@@ -165,7 +188,7 @@ export default function Evite() {
       setEvents((prev) => prev.map((e) => (e.id === id ? eventData : e)));
     } else {
       setEvents((prev) => [eventData, ...prev]);
-      setActiveEventId(id);
+    setActiveEventId(id);
     }
     
     // Save to Supabase
@@ -324,9 +347,9 @@ export default function Evite() {
               if (transformedImageUrl) {
                 uploadedUrls.push(transformedImageUrl);
               } else {
-                uploadedUrls.push(pub.publicUrl);
-              }
-            }
+            uploadedUrls.push(pub.publicUrl);
+          }
+        }
           } catch (transformException) {
             console.error("[Evite] Transformation exception:", transformException);
             console.error("[Evite] Exception details:", transformException instanceof Error ? transformException.message : String(transformException));
@@ -448,13 +471,97 @@ export default function Evite() {
     }
     
     try {
-      // Delete from Supabase and localStorage
+      // Delete associated images from Supabase Storage first
+      if (eventToDelete?.customImages && eventToDelete.customImages.length > 0) {
+        console.log(`[Evite] Deleting ${eventToDelete.customImages.length} image(s) associated with event ${id}`);
+        try {
+          for (const imageUrl of eventToDelete.customImages) {
+            try {
+              // Extract the path from the URL
+              // URL format: https://[project].supabase.co/storage/v1/object/public/evite-uploads/[path]
+              const urlParts = imageUrl.split('/evite-uploads/');
+              if (urlParts.length > 1) {
+                const imagePath = urlParts[1].split('?')[0]; // Remove query params
+                console.log(`[Evite] Deleting image: ${imagePath}`);
+                
+                const { error: deleteError } = await (supabase as any).storage
+                  .from("evite-uploads")
+                  .remove([imagePath]);
+                
+                if (deleteError) {
+                  console.warn(`[Evite] Failed to delete image ${imagePath}:`, deleteError);
+                } else {
+                  console.log(`[Evite] ✓ Deleted image: ${imagePath}`);
+                }
+              } else {
+                console.warn(`[Evite] Could not extract path from image URL: ${imageUrl}`);
+              }
+            } catch (imgError) {
+              console.warn(`[Evite] Error deleting image ${imageUrl}:`, imgError);
+              // Continue with other images even if one fails
+            }
+          }
+          
+          // Also try to delete the entire event folder if it exists
+          try {
+            const eventFolderPath = `${id}/`;
+            const { data: folderFiles, error: listError } = await (supabase as any).storage
+              .from("evite-uploads")
+              .list(eventFolderPath);
+            
+            if (!listError && folderFiles && folderFiles.length > 0) {
+              const filesToDelete = folderFiles.map((file: any) => `${eventFolderPath}${file.name}`);
+              console.log(`[Evite] Deleting ${filesToDelete.length} files from event folder: ${eventFolderPath}`);
+              
+              const { error: folderDeleteError } = await (supabase as any).storage
+                .from("evite-uploads")
+                .remove(filesToDelete);
+              
+              if (folderDeleteError) {
+                console.warn(`[Evite] Failed to delete event folder:`, folderDeleteError);
+              } else {
+                console.log(`[Evite] ✓ Deleted event folder: ${eventFolderPath}`);
+              }
+            }
+          } catch (folderError) {
+            console.warn(`[Evite] Error deleting event folder:`, folderError);
+            // Continue with database deletion even if folder deletion fails
+          }
+        } catch (storageError) {
+          console.warn(`[Evite] Error during image deletion:`, storageError);
+          // Continue with database deletion even if image deletion fails
+        }
+      }
+      
+      // Delete from Supabase database and localStorage
       await deleteEventFromStorage(id);
-      console.log(`[Evite] ✓ Storage deletion completed for event ${id}`);
+      console.log(`[Evite] ✓ Event ${id} deleted from database and storage`);
+      
+      // Clear form if deleting the active event
+      if (activeEventId === id) {
+        setActiveEventId(null);
+        // Reset form to empty
+        setDraft({
+          title: "",
+          hostName: "",
+          date: "",
+          time: "",
+          location: "",
+          description: "",
+          template: TEMPLATES[0].id,
+        });
+        setCustomizeEnabled(false);
+        setCustomStyle("classic");
+        setCustomFiles([]);
+        setImageApproved(null);
+        setTransformedImageUrl(null);
+        setOriginalImageUrl(null);
+        console.log(`[Evite] Form cleared after deleting active event`);
+      }
       
       toast({ 
         title: "Event deleted", 
-        description: "Event has been permanently removed." 
+        description: "Event and associated images have been permanently removed from the database." 
       });
     } catch (error) {
       console.error("[Evite] Failed to delete event:", error);
@@ -656,14 +763,23 @@ export default function Evite() {
               <CardTitle>Your Events</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {loading ? (
+              {authLoading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : !user ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Sign in to view and manage your events.</p>
+                  <Button onClick={() => setShowLogin(true)} className="w-full" size="sm">
+                    Sign In
+                  </Button>
+                </div>
+              ) : loading ? (
                 <p className="text-sm text-muted-foreground">Loading events...</p>
               ) : events.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No events yet. Create your first event below.</p>
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground mb-2">{events.length} event{events.length === 1 ? '' : 's'}</p>
-                  {events.map((event) => (
+              {events.map((event) => (
                 <div key={event.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border">
                   <button
                     className={`text-left flex-1 ${activeEventId === event.id ? "font-semibold" : ""}`}
@@ -678,7 +794,7 @@ export default function Evite() {
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
-                  ))}
+              ))}
                 </>
               )}
             </CardContent>
@@ -844,7 +960,7 @@ export default function Evite() {
                                   alt="Preview" 
                                   style={{ objectPosition: 'center' }}
                                 />
-                              </div>
+                                </div>
                               <p className="text-xs text-muted-foreground mt-2">
                                 Click "Transform & Preview" to see Ghibli art style transformation
                               </p>
@@ -955,8 +1071,13 @@ export default function Evite() {
                       )}
                     </div>
                     <div className="flex gap-3">
-                      <Button onClick={createEvent} className="flex-1" disabled={isUploading}>
-                        {activeEvent ? "Update Event" : "Create Event"}
+                      <Button 
+                        onClick={createEvent} 
+                        className="flex-1" 
+                        disabled={isUploading || !user}
+                        title={!user ? "Please sign in to create events" : ""}
+                      >
+                        {!user ? "Sign In to Create" : activeEvent ? "Update Event" : "Create Event"}
                       </Button>
                       {activeEvent && (
                         <Button variant="outline" className="flex-1" onClick={() => navigate(`/evite/${activeEvent.id}`)}>
@@ -1315,6 +1436,9 @@ export default function Evite() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Login Screen */}
+      {showLogin && <LoginScreen onClose={() => setShowLogin(false)} />}
     </div>
   );
 }

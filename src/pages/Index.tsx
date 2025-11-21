@@ -186,7 +186,13 @@ const Index = () => {
               <Button 
                 variant="outline"
                 size="lg"
-                onClick={() => window.location.href = '/evite'}
+                onClick={() => {
+                  if (!user) {
+                    setShowLogin(true);
+                  } else {
+                    window.location.href = '/evite';
+                  }
+                }}
                 className="text-xl px-12 py-6 rounded-full border-2 border-purple-300 hover:bg-purple-50 transition-all duration-300"
               >
                 <Calendar className="mr-3 w-6 h-6" />
