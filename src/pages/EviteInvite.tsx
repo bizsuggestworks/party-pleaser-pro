@@ -189,11 +189,33 @@ export default function EviteInvite() {
     );
   }
 
+  // Check if event has approved Ghibli image
+  const hasGhibliImage = event.useCustomImages && event.customImages && event.customImages.length > 0;
+  const ghibliImageUrl = hasGhibliImage ? event.customImages[0] : null;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background">
-      <div className="container mx-auto px-4 py-10 max-w-3xl">
+    <div 
+      className="min-h-screen relative"
+      style={{
+        backgroundImage: ghibliImageUrl ? `url(${ghibliImageUrl})` : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      {/* Opaque overlay to ensure form readability */}
+      <div 
+        className="absolute inset-0"
+        style={{
+          backgroundColor: ghibliImageUrl ? 'rgba(255, 255, 255, 0.85)' : 'transparent',
+          backdropFilter: ghibliImageUrl ? 'blur(2px)' : 'none',
+        }}
+      />
+      
+      <div className="container mx-auto px-4 py-10 max-w-3xl relative z-10">
         {/* Invitation card */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden bg-white/95 backdrop-blur-sm">
           <div className={`h-40 bg-gradient-to-r ${headerGradient}`} />
           <CardHeader className="text-center">
             <CardTitle className="text-3xl md:text-4xl">{event.title}</CardTitle>
@@ -217,7 +239,7 @@ export default function EviteInvite() {
         </Card>
 
         {/* RSVP card */}
-        <Card className="mt-6">
+        <Card className="mt-6 bg-white/95 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserCheck className="w-5 h-5" /> RSVP

@@ -238,7 +238,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
       <div style="max-width:640px;margin:0 auto;background-color:#ffffff">
         <!-- Hero Image Section with Ghibli Art and Welcome Text -->
         <div class="hero-image-container" style="position:relative;width:100%;max-width:640px;height:400px;overflow:hidden;background:${config.gradient};margin:0 auto">
-          <img class="hero-image" src="${htmlEscape(mainImage)}" alt="${title}" style="width:100%;max-width:640px;height:400px;object-fit:cover;object-position:center;display:block;margin:0;padding:0;border:0" />
+          <img class="hero-image" src="${mainImage}" alt="${htmlEscape(title)}" style="width:100%;max-width:640px;height:400px;object-fit:cover;object-position:center;display:block;margin:0;padding:0;border:0;background-color:#f0f0f0" />
           <!-- Overlay gradient for text readability -->
           <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.4))"></div>
           <!-- Welcome to the party text overlay -->
@@ -677,6 +677,10 @@ Deno.serve(async (req) => {
       hasCustomImages: event.useCustomImages && event.customImages && event.customImages.length > 0,
       customImagesArray: event.customImages,
       customImagesCount: event.customImages?.length || 0,
+      useCustomImages: event.useCustomImages,
+      firstImageUrl: event.customImages?.[0],
+      firstImageUrlType: typeof event.customImages?.[0],
+      firstImageUrlStartsWithHttp: event.customImages?.[0]?.startsWith('http'),
     });
 
     // Generate calendar invite
@@ -707,12 +711,29 @@ Deno.serve(async (req) => {
         
         // Log a snippet of the HTML to verify images are included
         if (event.useCustomImages && event.customImages && event.customImages.length > 0) {
-          const hasImageInHtml = html.includes('img src') && html.includes(event.customImages[0]);
-          console.log(`[send-evites] Email HTML includes images: ${hasImageInHtml}`);
+          const imageUrl = event.customImages[0];
+          const hasImageInHtml = html.includes('img src') && (html.includes(imageUrl) || html.includes(encodeURIComponent(imageUrl)));
+          console.log(`[send-evites] Email HTML image check for ${g.email}:`);
+          console.log(`[send-evites]   Image URL: ${imageUrl}`);
+          console.log(`[send-evites]   Has <img> tag: ${html.includes('img src')}`);
+          console.log(`[send-evites]   Contains image URL: ${html.includes(imageUrl)}`);
+          console.log(`[send-evites]   Contains encoded URL: ${html.includes(encodeURIComponent(imageUrl))}`);
+          console.log(`[send-evites]   Final check: ${hasImageInHtml}`);
+          
           if (!hasImageInHtml) {
-            console.error(`[send-evites] WARNING: Custom images exist but not found in email HTML!`);
-            console.log(`[send-evites] First image URL: ${event.customImages[0]}`);
-            console.log(`[send-evites] HTML snippet (first 500 chars): ${html.substring(0, 500)}`);
+            console.error(`[send-evites] ❌ WARNING: Custom images exist but not found in email HTML!`);
+            console.error(`[send-evites] First image URL: ${imageUrl}`);
+            console.error(`[send-evites] Image URL type: ${typeof imageUrl}`);
+            console.error(`[send-evites] Image URL length: ${imageUrl?.length}`);
+            console.error(`[send-evites] HTML snippet (first 1000 chars): ${html.substring(0, 1000)}`);
+            // Try to find where the image should be
+            const imgTagIndex = html.indexOf('<img');
+            if (imgTagIndex >= 0) {
+              console.error(`[send-evites] Found <img> tag at index ${imgTagIndex}`);
+              console.error(`[send-evites] Image tag context: ${html.substring(imgTagIndex, imgTagIndex + 200)}`);
+            }
+          } else {
+            console.log(`[send-evites] ✓ Email HTML correctly includes Ghibli image`);
           }
         }
         
