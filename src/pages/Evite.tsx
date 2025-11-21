@@ -901,14 +901,35 @@ export default function Evite() {
                                       },
                                     });
                                     
-                                    if (transformError || !transformData?.transformedImageUrl) {
+                                    if (transformError) {
+                                      console.error("[Evite] Transform error:", transformError);
                                       toast({
                                         title: "Transformation failed",
-                                        description: "Using original image",
-                                        variant: "default",
+                                        description: transformError.message || "Check console for details. Make sure REPLICATE_API_TOKEN is set.",
+                                        variant: "destructive",
+                                        duration: 10000,
                                       });
                                       setTransformedImageUrl(pub.publicUrl);
+                                    } else if (!transformData?.transformedImageUrl) {
+                                      console.warn("[Evite] No transformed image URL in response:", transformData);
+                                      toast({
+                                        title: "Transformation incomplete",
+                                        description: "No transformed image returned. Check if REPLICATE_API_TOKEN is set in Supabase secrets.",
+                                        variant: "destructive",
+                                        duration: 10000,
+                                      });
+                                      setTransformedImageUrl(pub.publicUrl);
+                                    } else if (transformData.transformedImageUrl === pub.publicUrl) {
+                                      console.warn("[Evite] Transformed URL same as original - transformation may have failed");
+                                      toast({
+                                        title: "Transformation may have failed",
+                                        description: "The transformed image appears to be the same as the original. Check Supabase logs.",
+                                        variant: "default",
+                                        duration: 8000,
+                                      });
+                                      setTransformedImageUrl(transformData.transformedImageUrl);
                                     } else {
+                                      console.log("[Evite] ✓ Transformation successful:", transformData.transformedImageUrl);
                                       setTransformedImageUrl(transformData.transformedImageUrl);
                                     }
                                     

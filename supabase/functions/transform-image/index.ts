@@ -53,6 +53,19 @@ Deno.serve(async (req) => {
         console.log("[transform-image] Image size:", (imageBuffer.byteLength / 1024).toFixed(2), "KB");
         
         // Use the aaronaftab/mirage-ghibli model for Ghibli style transformation
+        // Try using the model name directly first, then fallback to version
+        const modelInput = {
+          image: imageUrl, // Use the URL directly
+          prompt: "GHIBLI anime style photo",
+          go_fast: true,
+          guidance_scale: 10,
+          prompt_strength: 0.77,
+          num_inference_steps: 38,
+        };
+        
+        console.log("[transform-image] Calling Replicate API with model:", "aaronaftab/mirage-ghibli");
+        console.log("[transform-image] Input:", JSON.stringify(modelInput, null, 2));
+        
         const replicateResponse = await fetch("https://api.replicate.com/v1/predictions", {
           method: "POST",
           headers: {
@@ -60,17 +73,12 @@ Deno.serve(async (req) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            version: "166efd159b4138da932522bc5af40d39194033f587d9bdbab1e594119eae3e7f", // aaronaftab/mirage-ghibli model
-            input: {
-              image: imageUrl, // Use the URL directly instead of base64
-              prompt: "GHIBLI anime style photo",
-              go_fast: true,
-              guidance_scale: 10,
-              prompt_strength: 0.77,
-              num_inference_steps: 38,
-            },
+            version: "166efd159b4138da932522bc5af40d39194033f587d9bdbab1e594119eae3e7f", // aaronaftab/mirage-ghibli:166efd159b4138da932522bc5af40d39194033f587d9bdbab1e594119eae3e7f
+            input: modelInput,
           }),
         });
+        
+        console.log("[transform-image] Replicate API response status:", replicateResponse.status);
 
         if (replicateResponse.ok) {
           const prediction = await replicateResponse.json();
@@ -98,55 +106,121 @@ Deno.serve(async (req) => {
           }
           
           if (result.status === "succeeded") {
+            console.log("[transform-image] Transformation succeeded! Processing output...");
+            console.log("[transform-image] Raw output:", JSON.stringify(result.output, null, 2));
+            
             if (result.output) {
-              // Handle different output formats
-              // The output might be an array of file objects or a single URL string
-              if (Array.isArray(result.output)) {
-                // If it's an array, get the first item
+              // According to Replicate API: output is an array where output[0] has a .url() method
+              // In REST API, it's typically an array of URL strings
+              if (Array.isArray(result.output) && result.output.length > 0) {
+                console.log("[transform-image] Output is an array with", result.output.length, "items");
                 const firstOutput = result.output[0];
-                // Check if it's a file object with a url() method or a direct URL string
-                if (typeof firstOutput === 'string') {
+                
+                // REST API typically returns array of URL strings
+                if (typeof firstOutput === 'string' && firstOutput.startsWith('http')) {
                   transformedImageUrl = firstOutput;
-                } else if (firstOutput && typeof firstOutput === 'object' && firstOutput.url) {
-                  // If it has a url property or method
-                  transformedImageUrl = typeof firstOutput.url === 'function' ? firstOutput.url() : firstOutput.url;
-                } else {
-                  // Try to get URL from the object directly
-                  transformedImageUrl = firstOutput;
+                  console.log("[transform-image] ✓ Extracted URL string from array:", transformedImageUrl);
                 }
-              } else if (typeof result.output === 'string') {
+                // Handle object with url property or method (SDK style, but might appear in REST API)
+                else if (firstOutput && typeof firstOutput === 'object') {
+                  if (typeof firstOutput.url === 'function') {
+                    transformedImageUrl = firstOutput.url();
+                    console.log("[transform-image] ✓ Extracted URL via .url() method:", transformedImageUrl);
+                  } else if (firstOutput.url && typeof firstOutput.url === 'string') {
+                    transformedImageUrl = firstOutput.url;
+                    console.log("[transform-image] ✓ Extracted URL from .url property:", transformedImageUrl);
+                  } else {
+                    // Log the structure to understand what we're getting
+                    console.warn("[transform-image] Array item is object but no URL found");
+                    console.warn("[transform-image] Object keys:", Object.keys(firstOutput));
+                    console.warn("[transform-image] Object structure:", JSON.stringify(firstOutput, null, 2));
+                  }
+                }
+                // Fallback: try to convert to string
+                else {
+                  const outputStr = String(firstOutput);
+                  if (outputStr.startsWith('http')) {
+                    transformedImageUrl = outputStr;
+                    console.log("[transform-image] ✓ Extracted URL from string conversion:", transformedImageUrl);
+                  } else {
+                    console.warn("[transform-image] Could not extract valid URL from array item");
+                    console.warn("[transform-image] First output type:", typeof firstOutput);
+                    console.warn("[transform-image] First output value:", firstOutput);
+                  }
+                }
+              } 
+              // Handle single string URL (fallback)
+              else if (typeof result.output === 'string') {
                 transformedImageUrl = result.output;
-              } else if (result.output.url) {
+                console.log("[transform-image] Output is a single string URL:", transformedImageUrl);
+              } 
+              // Handle object with url property
+              else if (result.output && typeof result.output === 'object' && result.output.url) {
                 transformedImageUrl = typeof result.output.url === 'function' ? result.output.url() : result.output.url;
-              } else {
-                transformedImageUrl = result.output;
+                console.log("[transform-image] Extracted URL from object.url:", transformedImageUrl);
               }
               
-              console.log("[transform-image] ✓✓✓ Image transformed to Ghibli style successfully! ✓✓✓");
-              console.log("[transform-image] Transformed URL:", transformedImageUrl);
-              console.log("[transform-image] Output type:", typeof result.output, Array.isArray(result.output) ? 'array' : 'single');
+              if (transformedImageUrl && transformedImageUrl !== imageUrl && transformedImageUrl.startsWith('http')) {
+                console.log("[transform-image] ✓✓✓ Image transformed to Ghibli style successfully! ✓✓✓");
+                console.log("[transform-image] Original URL:", imageUrl);
+                console.log("[transform-image] Transformed URL:", transformedImageUrl);
+              } else {
+                console.warn("[transform-image] ⚠️ Transformed URL validation failed");
+                console.warn("[transform-image] Transformed URL:", transformedImageUrl);
+                console.warn("[transform-image] Original URL:", imageUrl);
+                console.warn("[transform-image] Is valid URL?", transformedImageUrl?.startsWith('http'));
+              }
             } else {
               console.warn("[transform-image] Transformation succeeded but no output URL");
+              console.warn("[transform-image] Full result:", JSON.stringify(result, null, 2));
             }
           } else if (result.status === "failed") {
-            console.error("[transform-image] Transformation failed:", result.error);
+            console.error("[transform-image] Transformation failed with status: failed");
+            console.error("[transform-image] Error object:", JSON.stringify(result.error, null, 2));
             if (result.error) {
               console.error("[transform-image] Error details:", JSON.stringify(result.error, null, 2));
             }
+            console.error("[transform-image] Full result:", JSON.stringify(result, null, 2));
           } else {
-            console.warn("[transform-image] Transformation incomplete:", result.status, result.error);
+            console.warn("[transform-image] Transformation incomplete - status:", result.status);
+            console.warn("[transform-image] Result:", JSON.stringify(result, null, 2));
+            if (result.error) {
+              console.warn("[transform-image] Error:", JSON.stringify(result.error, null, 2));
+            }
           }
         } else {
           const errorText = await replicateResponse.text();
-          console.error("[transform-image] Replicate API error:", replicateResponse.status, errorText);
+          console.error("[transform-image] ❌ Replicate API error - Status:", replicateResponse.status);
+          console.error("[transform-image] Error response body:", errorText);
+          
+          // Try to parse error for more details
+          try {
+            const errorJson = JSON.parse(errorText);
+            console.error("[transform-image] Parsed error JSON:", JSON.stringify(errorJson, null, 2));
+          } catch {
+            // Not JSON, just log the text
+            console.error("[transform-image] Error is not JSON format");
+          }
+          console.error("[transform-image] Error response:", errorText);
+          
+          // Try to parse error for more details
+          try {
+            const errorJson = JSON.parse(errorText);
+            console.error("[transform-image] Parsed error:", JSON.stringify(errorJson, null, 2));
+          } catch {
+            // Not JSON, just log the text
+          }
         }
       } catch (replicateError) {
         console.error("[transform-image] Replicate transformation exception:", replicateError);
         console.error("[transform-image] Error details:", replicateError instanceof Error ? replicateError.message : String(replicateError));
       }
     } else {
-      console.warn("[transform-image] REPLICATE_API_TOKEN not set. Add it in Supabase Dashboard → Edge Functions → Secrets to enable Ghibli transformation.");
-      console.warn("[transform-image] Using original image (will still add 'Welcome to the party' text overlay)");
+      console.error("[transform-image] ❌ REPLICATE_API_TOKEN not set!");
+      console.error("[transform-image] To enable Ghibli transformation:");
+      console.error("[transform-image] 1. Get your API token from https://replicate.com/account/api-tokens");
+      console.error("[transform-image] 2. Add it in Supabase Dashboard → Edge Functions → Secrets → REPLICATE_API_TOKEN");
+      console.warn("[transform-image] Using original image (no transformation will occur)");
     }
     
     console.log("[transform-image] Final image URL (transformed or original):", transformedImageUrl);
