@@ -89,6 +89,38 @@ export default function Evite() {
     [events, activeEventId]
   );
 
+  // Populate draft form when active event changes
+  useEffect(() => {
+    if (activeEvent) {
+      setDraft({
+        title: activeEvent.title || "",
+        hostName: activeEvent.hostName || "",
+        date: activeEvent.date || "",
+        time: activeEvent.time || "",
+        location: activeEvent.location || "",
+        description: activeEvent.description || "",
+        template: activeEvent.template || TEMPLATES[0].id,
+      });
+      setCustomizeEnabled(activeEvent.useCustomImages || false);
+      setCustomStyle(activeEvent.customStyle || "classic");
+      setCustomFiles([]); // Clear file selection when switching events
+    } else {
+      // Reset to empty form when no event is selected
+      setDraft({
+        title: "",
+        hostName: "",
+        date: "",
+        time: "",
+        location: "",
+        description: "",
+        template: TEMPLATES[0].id,
+      });
+      setCustomizeEnabled(false);
+      setCustomStyle("classic");
+      setCustomFiles([]);
+    }
+  }, [activeEventId, activeEvent]);
+
   // Note: We don't auto-save all events on every change anymore
   // Individual operations (create, update, delete) handle their own persistence
 
@@ -101,25 +133,34 @@ export default function Evite() {
       });
       return;
     }
-    const id = String(Date.now());
-    const newEvent: EviteEvent = {
+    
+    // Check if we're updating an existing event or creating a new one
+    const isUpdating = activeEventId && activeEvent;
+    const id = isUpdating ? activeEventId : String(Date.now());
+    
+    const eventData: EviteEvent = {
       id,
       ...draft,
-      guests: [],
+      // Preserve existing guests and images when updating
+      guests: isUpdating ? (activeEvent?.guests || []) : [],
       useCustomImages: customizeEnabled,
       customStyle: customizeEnabled ? customStyle : undefined,
-      customImages: [],
-      createdAt: Date.now(),
+      customImages: isUpdating ? (activeEvent?.customImages || []) : [],
+      createdAt: isUpdating ? (activeEvent?.createdAt || Date.now()) : Date.now(),
     };
     
-    // Add to local state first for immediate UI update
-    const next = [newEvent, ...events];
-    setEvents(next);
-    setActiveEventId(id);
+    // Update local state first for immediate UI update
+    if (isUpdating) {
+      setEvents((prev) => prev.map((e) => (e.id === id ? eventData : e)));
+    } else {
+      setEvents((prev) => [eventData, ...prev]);
+      setActiveEventId(id);
+    }
     
     // Save to Supabase
     try {
       // If customization enabled and files selected, upload and update event
+      // If updating without new files, preserve existing images
       if (customizeEnabled && customFiles.length > 0) {
         setIsUploading(true);
         const uploadedUrls: string[] = [];
@@ -288,25 +329,34 @@ export default function Evite() {
         }
         
         console.log(`[Evite] All files uploaded. Total URLs: ${uploadedUrls.length}`, uploadedUrls);
-        const updatedEvent: EviteEvent = { ...newEvent, customImages: uploadedUrls };
+        const updatedEvent: EviteEvent = { ...eventData, customImages: uploadedUrls };
         await saveEvent(updatedEvent);
         
         // Update local state with images
         setEvents((prev) => prev.map((e) => (e.id === id ? updatedEvent : e)));
-        console.log(`[Evite] Event ${id} saved with ${uploadedUrls.length} custom images`);
+        console.log(`[Evite] Event ${id} ${isUpdating ? 'updated' : 'saved'} with ${uploadedUrls.length} custom images`);
+      } else if (customizeEnabled && isUpdating && activeEvent?.customImages && activeEvent.customImages.length > 0) {
+        // Preserve existing images when updating without new files
+        const updatedEvent: EviteEvent = { ...eventData, customImages: activeEvent.customImages };
+        await saveEvent(updatedEvent);
+        setEvents((prev) => prev.map((e) => (e.id === id ? updatedEvent : e)));
+        console.log(`[Evite] Event ${id} updated, preserving existing ${activeEvent.customImages.length} custom images`);
       } else {
-        await saveEvent(newEvent);
-        console.log(`[Evite] Event ${id} saved without custom images`);
+        await saveEvent(eventData);
+        console.log(`[Evite] Event ${id} ${isUpdating ? 'updated' : 'saved'} without custom images`);
       }
       
       // Reload events to ensure consistency
       const reloadedEvents = await loadEvents();
       setEvents(reloadedEvents);
-      console.log(`[Evite] Reloaded ${reloadedEvents.length} events after creation`);
+      console.log(`[Evite] Reloaded ${reloadedEvents.length} events after ${isUpdating ? 'update' : 'creation'}`);
     } finally {
       setIsUploading(false);
     }
-    toast({ title: "Event created", description: "Share your invite link with guests." });
+    toast({ 
+      title: isUpdating ? "Event updated" : "Event created", 
+      description: "Share your invite link with guests." 
+    });
   };
 
   const deleteEvent = async (id: string) => {
@@ -720,7 +770,7 @@ export default function Evite() {
                     </div>
                     <div className="flex gap-3">
                       <Button onClick={createEvent} className="flex-1" disabled={isUploading}>
-                        Create Event
+                        {activeEvent ? "Update Event" : "Create Event"}
                       </Button>
                       {activeEvent && (
                         <Button variant="outline" className="flex-1" onClick={() => navigate(`/evite/${activeEvent.id}`)}>
