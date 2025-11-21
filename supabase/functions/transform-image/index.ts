@@ -33,13 +33,13 @@ Deno.serve(async (req) => {
 
     console.log("[transform-image] Transforming image to Ghibli style:", imageUrl);
 
-    // Fetch the original image
-    const imageResponse = await fetch(imageUrl);
+    // Fetch the original image to verify it's accessible
+    // Note: We don't need to convert to base64 since Replicate accepts URLs directly
+    const imageResponse = await fetch(imageUrl, { method: 'HEAD' });
     if (!imageResponse.ok) {
-      throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+      console.warn(`[transform-image] Image HEAD check failed: ${imageResponse.status}, but continuing with URL`);
+      // Don't throw - Replicate might still be able to fetch it
     }
-    const imageBuffer = await imageResponse.arrayBuffer();
-    const imageBase64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
 
     // Use Replicate API for Ghibli style transformation
     const replicateApiKey = Deno.env.get("REPLICATE_API_TOKEN");
@@ -50,7 +50,6 @@ Deno.serve(async (req) => {
       try {
         console.log("[transform-image] Using Replicate API for Ghibli transformation");
         console.log("[transform-image] Original image URL:", imageUrl);
-        console.log("[transform-image] Image size:", (imageBuffer.byteLength / 1024).toFixed(2), "KB");
         
         // Use the aaronaftab/mirage-ghibli model for Ghibli style transformation
         // Try using the model name directly first, then fallback to version
