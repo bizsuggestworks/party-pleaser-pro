@@ -95,9 +95,46 @@ export default function Evite() {
   const [customFiles, setCustomFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showTransformPreview, setShowTransformPreview] = useState(false);
+  const [showTransformOptions, setShowTransformOptions] = useState(false);
+  const [selectedTransformOption, setSelectedTransformOption] = useState<string | null>(null);
+  const [customTransformPrompt, setCustomTransformPrompt] = useState<string>("");
   const [transformedImageUrl, setTransformedImageUrl] = useState<string | null>(null);
   const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
   const [imageApproved, setImageApproved] = useState<boolean | null>(null);
+  
+  // Transformation options
+  const transformOptions = [
+    {
+      id: "elegant",
+      name: "Elegant & Sophisticated",
+      description: "Perfect for formal events and weddings",
+      prompt: "Make the image elegant and sophisticated. Use refined colors and graceful composition. Make the scene natural and polished."
+    },
+    {
+      id: "playful",
+      name: "Fun & Playful",
+      description: "Great for kids' parties and birthdays",
+      prompt: "Make the image fun and playful. Use bright, cheerful colors and whimsical elements. Make the scene natural and joyful."
+    },
+    {
+      id: "vibrant",
+      name: "Vibrant & Colorful",
+      description: "Ideal for celebrations and festivals",
+      prompt: "Make the image vibrant and colorful. Use bold, energetic colors and dynamic composition. Make the scene natural and festive."
+    },
+    {
+      id: "minimal",
+      name: "Natural & Minimal",
+      description: "Clean and simple style",
+      prompt: "Make the image natural and minimal. Use soft colors and clean composition. Make the scene natural and simple."
+    },
+    {
+      id: "custom",
+      name: "Custom",
+      description: "Enter your own transformation instructions",
+      prompt: "" // Will be replaced with user's custom input
+    }
+  ];
 
   const [newGuest, setNewGuest] = useState({ name: "", email: "", phone: "" });
 
@@ -124,6 +161,8 @@ export default function Evite() {
       setImageApproved(null); // Reset approval state
       setTransformedImageUrl(null); // Reset transformed image
       setOriginalImageUrl(null); // Reset original image
+      setSelectedTransformOption(null); // Reset selected transformation option
+      setCustomTransformPrompt(""); // Reset custom prompt
     } else {
       // Reset to empty form when no event is selected
       setDraft({
@@ -141,6 +180,8 @@ export default function Evite() {
       setImageApproved(null); // Reset approval state
       setTransformedImageUrl(null); // Reset transformed image
       setOriginalImageUrl(null); // Reset original image
+      setSelectedTransformOption(null); // Reset selected transformation option
+      setCustomTransformPrompt(""); // Reset custom prompt
     }
   }, [activeEventId, activeEvent]);
 
@@ -194,8 +235,8 @@ export default function Evite() {
     // Save to Supabase
     try {
       // If customization enabled and files selected, upload and update event
-      // Only include image if user approved it (imageApproved === true)
-      if (customizeEnabled && customFiles.length > 0 && imageApproved === true && transformedImageUrl) {
+      // Include image if user approved transformed (imageApproved === true) or denied (imageApproved === false, use original)
+      if (customizeEnabled && customFiles.length > 0 && imageApproved !== null && originalImageUrl) {
         setIsUploading(true);
         const uploadedUrls: string[] = [];
         console.log(`[Evite] Uploading ${customFiles.length} files for event ${id}`);
@@ -224,7 +265,7 @@ export default function Evite() {
         const file = customFiles[0];
         const timestamp = Date.now();
         const originalPath = `evite-uploads/${id}/original_${timestamp}_${file.name}`;
-        console.log(`[Evite] Uploading photo for Ghibli transformation:`);
+        console.log(`[Evite] Uploading photo for nano-banana transformation:`);
         console.log(`[Evite]   Name: ${file.name}`);
         console.log(`[Evite]   Size: ${(file.size / 1024).toFixed(2)} KB`);
         console.log(`[Evite]   Type: ${file.type}`);
@@ -311,50 +352,76 @@ export default function Evite() {
           
           console.log(`[Evite] Original image URL: ${pub.publicUrl}`);
           
-          // Step 2: Transform image to Ghibli style
-          console.log(`[Evite] Transforming image to Ghibli art style...`);
+          // Step 2: Transform image to nano-banana style
+          console.log(`[Evite] Transforming image to nano-banana art style...`);
           toast({ 
             title: "Transforming image", 
-            description: "Converting your photo to Studio Ghibli art style...",
+            description: "Converting your photo to nano-banana art style...",
             duration: 5000
           });
           
           try {
+            // Get the selected option's prompt (use custom prompt if custom option is selected)
+            const selectedOption = transformOptions.find(opt => opt.id === selectedTransformOption);
+            const promptToUse = selectedTransformOption === "custom" 
+              ? customTransformPrompt.trim() 
+              : selectedOption?.prompt || "";
+            
             const { data: transformData, error: transformError } = await supabase.functions.invoke("transform-image", {
               body: { 
                 imageUrl: pub.publicUrl,
-                eventTitle: draft.title
+                eventTitle: draft.title,
+                transformOption: selectedTransformOption,
+                transformPrompt: promptToUse
               },
             });
             
             console.log("[Evite] Transform response:", { transformData, transformError });
             
-            if (transformError) {
-              console.warn("[Evite] Image transformation failed, using original:", transformError);
-              console.warn("[Evite] Error details:", JSON.stringify(transformError, null, 2));
-              // Use original image if transformation fails
-              uploadedUrls.push(pub.publicUrl);
-            } else if (transformData?.transformedImageUrl && transformData.transformedImageUrl !== pub.publicUrl) {
-              console.log(`[Evite] ✓✓✓ Image transformed to Ghibli style! ✓✓✓`);
-              console.log(`[Evite] Original URL: ${pub.publicUrl}`);
-              console.log(`[Evite] Transformed URL: ${transformData.transformedImageUrl}`);
-              // Use the transformed image that was already previewed and approved
-              uploadedUrls.push(transformedImageUrl || transformData.transformedImageUrl);
-            } else {
-              console.warn("[Evite] No transformed image URL returned or same as original");
-              console.warn("[Evite] Transform data:", transformData);
-              // Use the transformed image that was already previewed and approved, or original if no preview
-              if (transformedImageUrl) {
-                uploadedUrls.push(transformedImageUrl);
+            // Check user's approval decision: use transformed if approved, original if denied
+            if (imageApproved === false) {
+              // User denied transformed image, use original
+              console.log(`[Evite] User denied transformed image, using original image`);
+              uploadedUrls.push(originalImageUrl || pub.publicUrl);
+            } else if (imageApproved === true) {
+              // User approved transformed image
+              if (transformError) {
+                console.warn("[Evite] Image transformation failed, using original:", transformError);
+                console.warn("[Evite] Error details:", JSON.stringify(transformError, null, 2));
+                // Use original image if transformation fails
+                uploadedUrls.push(originalImageUrl || pub.publicUrl);
+              } else if (transformData?.transformedImageUrl && transformData.transformedImageUrl !== pub.publicUrl) {
+                console.log(`[Evite] ✓✓✓ Image transformed to nano-banana style! ✓✓✓`);
+                console.log(`[Evite] Original URL: ${pub.publicUrl}`);
+                console.log(`[Evite] Transformed URL: ${transformData.transformedImageUrl}`);
+                // Use the transformed image that was already previewed and approved
+                uploadedUrls.push(transformedImageUrl || transformData.transformedImageUrl);
               } else {
-            uploadedUrls.push(pub.publicUrl);
-          }
-        }
+                console.warn("[Evite] No transformed image URL returned or same as original");
+                console.warn("[Evite] Transform data:", transformData);
+                // Use the transformed image that was already previewed and approved, or original if no preview
+                if (transformedImageUrl) {
+                  uploadedUrls.push(transformedImageUrl);
+                } else {
+                  uploadedUrls.push(originalImageUrl || pub.publicUrl);
+                }
+              }
+            } else {
+              // imageApproved is null - use original as default
+              console.log(`[Evite] No approval decision, using original image`);
+              uploadedUrls.push(originalImageUrl || pub.publicUrl);
+            }
           } catch (transformException) {
             console.error("[Evite] Transformation exception:", transformException);
             console.error("[Evite] Exception details:", transformException instanceof Error ? transformException.message : String(transformException));
             // Use original image if transformation fails
-            uploadedUrls.push(pub.publicUrl);
+            if (imageApproved === false) {
+              // User denied, use original
+              uploadedUrls.push(originalImageUrl || pub.publicUrl);
+            } else {
+              // Transformation failed, fallback to original
+              uploadedUrls.push(originalImageUrl || pub.publicUrl);
+            }
           }
         } catch (uploadException) {
           console.error(`[Evite] Exception during upload:`, uploadException);
@@ -556,6 +623,9 @@ export default function Evite() {
         setImageApproved(null);
         setTransformedImageUrl(null);
         setOriginalImageUrl(null);
+        setSelectedTransformOption(null);
+        setCustomTransformPrompt("");
+        setImageApproved(null);
         console.log(`[Evite] Form cleared after deleting active event`);
       }
       
@@ -667,7 +737,7 @@ export default function Evite() {
         guestsCount: eventToSend.guests.length,
         firstImageUrl: eventToSend.customImages?.[0],
         firstImageUrlType: typeof eventToSend.customImages?.[0],
-        isGhibliImage: eventToSend.customImages?.[0]?.includes('replicate') || eventToSend.customImages?.[0]?.includes('transform'),
+        isNanoBananaImage: eventToSend.customImages?.[0]?.includes('replicate') || eventToSend.customImages?.[0]?.includes('transform'),
       });
       
       const { data, error } = await supabase.functions.invoke("send-evites", {
@@ -970,7 +1040,7 @@ export default function Evite() {
                               </select>
                             </div>
                             <div>
-                              <Label>Upload photo (1 photo will be transformed to Ghibli art style)</Label>
+                              <Label>Upload photo (1 photo will be transformed to nano-banana art style)</Label>
                               <input
                                 type="file"
                                 accept="image/*"
@@ -985,7 +1055,7 @@ export default function Evite() {
                                 className="block w-full text-sm"
                               />
                               <p className="text-xs text-muted-foreground mt-1">
-                                Your photo will be transformed into Studio Ghibli art style with "Welcome to the party" text.
+                                Your photo will be transformed into nano-banana art style with "Welcome to the party" text.
                               </p>
                             </div>
                           </div>
@@ -1000,104 +1070,15 @@ export default function Evite() {
                                 />
                                 </div>
                               <p className="text-xs text-muted-foreground mt-2">
-                                Click "Transform & Preview" to see Ghibli art style transformation
+                                Click "Transform & Preview" to see nano-banana art style transformation
                               </p>
                               <Button
                                 type="button"
                                 variant="outline"
                                 className="mt-2"
                                 onClick={async () => {
-                                  // Upload and transform to show preview
-                                  const file = customFiles[0];
-                                  setIsUploading(true);
-                                  try {
-                                    const timestamp = Date.now();
-                                    const path = `evite-uploads/preview_${timestamp}_${file.name}`;
-                                    
-                                    const { data: up, error: upErr } = await (supabase as any).storage.from("evite-uploads").upload(path, file, {
-                                      cacheControl: "3600",
-                                      upsert: false,
-                                    });
-                                    
-                                    if (upErr) {
-                                      toast({
-                                        title: "Upload failed",
-                                        description: "Could not upload image for preview",
-                                        variant: "destructive",
-                                      });
-                                      setIsUploading(false);
-                                      return;
-                                    }
-                                    
-                                    const { data: pub } = (supabase as any).storage.from("evite-uploads").getPublicUrl(up.path);
-                                    if (!pub?.publicUrl) {
-                                      toast({
-                                        title: "Preview failed",
-                                        description: "Could not get image URL",
-                                        variant: "destructive",
-                                      });
-                                      setIsUploading(false);
-                                      return;
-                                    }
-                                    
-                                    setOriginalImageUrl(pub.publicUrl);
-                                    
-                                    // Transform image
-                                    toast({
-                                      title: "Transforming...",
-                                      description: "Converting to Ghibli art style",
-                                    });
-                                    
-                                    const { data: transformData, error: transformError } = await supabase.functions.invoke("transform-image", {
-                                      body: {
-                                        imageUrl: pub.publicUrl,
-                                        eventTitle: draft.title || "Event"
-                                      },
-                                    });
-                                    
-                                    if (transformError) {
-                                      console.error("[Evite] Transform error:", transformError);
-                                      toast({
-                                        title: "Transformation failed",
-                                        description: transformError.message || "Check console for details. Make sure REPLICATE_API_TOKEN is set.",
-                                        variant: "destructive",
-                                        duration: 10000,
-                                      });
-                                      setTransformedImageUrl(pub.publicUrl);
-                                    } else if (!transformData?.transformedImageUrl) {
-                                      console.warn("[Evite] No transformed image URL in response:", transformData);
-                                      toast({
-                                        title: "Transformation incomplete",
-                                        description: "No transformed image returned. Check if REPLICATE_API_TOKEN is set in Supabase secrets.",
-                                        variant: "destructive",
-                                        duration: 10000,
-                                      });
-                                      setTransformedImageUrl(pub.publicUrl);
-                                    } else if (transformData.transformedImageUrl === pub.publicUrl) {
-                                      console.warn("[Evite] Transformed URL same as original - transformation may have failed");
-                                      toast({
-                                        title: "Transformation may have failed",
-                                        description: "The transformed image appears to be the same as the original. Check Supabase logs.",
-                                        variant: "default",
-                                        duration: 8000,
-                                      });
-                                      setTransformedImageUrl(transformData.transformedImageUrl);
-                                    } else {
-                                      console.log("[Evite] ✓ Transformation successful:", transformData.transformedImageUrl);
-                                      setTransformedImageUrl(transformData.transformedImageUrl);
-                                    }
-                                    
-                                    setShowTransformPreview(true);
-                                  } catch (err) {
-                                    console.error("Preview error:", err);
-                                    toast({
-                                      title: "Preview error",
-                                      description: "Could not generate preview",
-                                      variant: "destructive",
-                                    });
-                                  } finally {
-                                    setIsUploading(false);
-                                  }
+                                  // Show transformation options dialog first
+                                  setShowTransformOptions(true);
                                 }}
                                 disabled={isUploading}
                               >
@@ -1405,24 +1386,226 @@ export default function Evite() {
         </div>
       </div>
       
+      {/* Transformation Options Dialog */}
+      <Dialog open={showTransformOptions} onOpenChange={setShowTransformOptions}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Choose Transformation Style</DialogTitle>
+            <DialogDescription>
+              Select a transformation style for your image. Each style will give your invite a unique look.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            {transformOptions.map((option) => (
+              <div
+                key={option.id}
+                onClick={() => setSelectedTransformOption(option.id)}
+                className={`p-5 border-2 rounded-lg cursor-pointer transition-all ${
+                  selectedTransformOption === option.id
+                    ? "border-primary bg-primary/10 shadow-md"
+                    : "border-gray-200 hover:border-primary/50 hover:bg-gray-50"
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg mb-2">{option.name}</h3>
+                    <p className="text-sm text-muted-foreground">{option.description}</p>
+                  </div>
+                  {selectedTransformOption === option.id && (
+                    <div className="ml-3 flex-shrink-0">
+                      <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">
+                        ✓
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Custom prompt text field - shown when custom option is selected */}
+          {selectedTransformOption === "custom" && (
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="custom-prompt">Enter your custom transformation instructions</Label>
+              <Textarea
+                id="custom-prompt"
+                placeholder="e.g., Make the image look like a watercolor painting with pastel colors and soft edges..."
+                value={customTransformPrompt}
+                onChange={(e) => setCustomTransformPrompt(e.target.value)}
+                className="min-h-[100px]"
+                rows={4}
+              />
+              <p className="text-xs text-muted-foreground">
+                Describe how you want the image to be transformed. Be specific about colors, style, mood, or any other details.
+              </p>
+            </div>
+          )}
+          
+          <DialogFooter className="mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTransformOptions(false);
+                setSelectedTransformOption(null);
+                setCustomTransformPrompt("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!selectedTransformOption) {
+                  toast({
+                    title: "Please select a style",
+                    description: "Choose a transformation style to continue",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                
+                // Validate custom prompt if custom option is selected
+                if (selectedTransformOption === "custom" && !customTransformPrompt.trim()) {
+                  toast({
+                    title: "Custom prompt required",
+                    description: "Please enter your transformation instructions",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                
+                setShowTransformOptions(false);
+                
+                // Upload and transform to show preview
+                const file = customFiles[0];
+                setIsUploading(true);
+                try {
+                  const timestamp = Date.now();
+                  const path = `evite-uploads/preview_${timestamp}_${file.name}`;
+                  
+                  const { data: up, error: upErr } = await (supabase as any).storage.from("evite-uploads").upload(path, file, {
+                    cacheControl: "3600",
+                    upsert: false,
+                  });
+                  
+                  if (upErr) {
+                    toast({
+                      title: "Upload failed",
+                      description: "Could not upload image for preview",
+                      variant: "destructive",
+                    });
+                    setIsUploading(false);
+                    return;
+                  }
+                  
+                  const { data: pub } = (supabase as any).storage.from("evite-uploads").getPublicUrl(up.path);
+                  if (!pub?.publicUrl) {
+                    toast({
+                      title: "Preview failed",
+                      description: "Could not get image URL",
+                      variant: "destructive",
+                    });
+                    setIsUploading(false);
+                    return;
+                  }
+                  
+                  setOriginalImageUrl(pub.publicUrl);
+                  
+                  // Get the selected option's prompt (use custom prompt if custom option is selected)
+                  const selectedOption = transformOptions.find(opt => opt.id === selectedTransformOption);
+                  const promptToUse = selectedTransformOption === "custom" 
+                    ? customTransformPrompt.trim() 
+                    : selectedOption?.prompt || "";
+                  
+                  // Transform image
+                  toast({
+                    title: "Transforming...",
+                    description: `Converting to ${selectedOption?.name || "nano-banana"} style`,
+                  });
+                  
+                  const { data: transformData, error: transformError } = await supabase.functions.invoke("transform-image", {
+                    body: {
+                      imageUrl: pub.publicUrl,
+                      eventTitle: draft.title || "Event",
+                      transformOption: selectedTransformOption,
+                      transformPrompt: promptToUse
+                    },
+                  });
+                  
+                  if (transformError) {
+                    console.error("[Evite] Transform error:", transformError);
+                    toast({
+                      title: "Transformation failed",
+                      description: transformError.message || "Check console for details. Make sure REPLICATE_API_TOKEN is set.",
+                      variant: "destructive",
+                      duration: 10000,
+                    });
+                    setTransformedImageUrl(pub.publicUrl);
+                  } else if (!transformData?.transformedImageUrl) {
+                    console.warn("[Evite] No transformed image URL in response:", transformData);
+                    toast({
+                      title: "Transformation incomplete",
+                      description: "No transformed image returned. Check if REPLICATE_API_TOKEN is set in Supabase secrets.",
+                      variant: "destructive",
+                      duration: 10000,
+                    });
+                    setTransformedImageUrl(pub.publicUrl);
+                  } else if (transformData.transformedImageUrl === pub.publicUrl) {
+                    console.warn("[Evite] Transformed URL same as original - transformation may have failed");
+                    toast({
+                      title: "Transformation may have failed",
+                      description: "The transformed image appears to be the same as the original. Check Supabase logs.",
+                      variant: "default",
+                      duration: 8000,
+                    });
+                    setTransformedImageUrl(transformData.transformedImageUrl);
+                  } else {
+                    console.log("[Evite] ✓ Transformation successful:", transformData.transformedImageUrl);
+                    setTransformedImageUrl(transformData.transformedImageUrl);
+                  }
+                  
+                  setShowTransformPreview(true);
+                } catch (err) {
+                  console.error("Preview error:", err);
+                  toast({
+                    title: "Preview error",
+                    description: "Could not generate preview",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsUploading(false);
+                }
+              }}
+              disabled={
+                !selectedTransformOption || 
+                isUploading || 
+                (selectedTransformOption === "custom" && !customTransformPrompt.trim())
+              }
+            >
+              {isUploading ? "Transforming..." : "Continue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       {/* Transform Preview Dialog */}
       <Dialog open={showTransformPreview} onOpenChange={setShowTransformPreview}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Preview: Ghibli Art Style Transformation</DialogTitle>
+            <DialogTitle>Preview: nano-banana Art Style Transformation</DialogTitle>
             <DialogDescription>
-              This is how your invite will look with the Ghibli art style transformation. Approve to use this image, or deny to send invites without any image.
+              This is how your invite will look with the nano-banana art style transformation. Approve to use this transformed image, or deny to use your original uploaded image.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             {transformedImageUrl && (
               <div className="space-y-2">
-                <Label>Transformed Image (Ghibli Style)</Label>
+                <Label>Transformed Image (nano-banana Style)</Label>
                 <div className="border rounded-lg overflow-hidden">
                   <img 
                     src={transformedImageUrl} 
-                    alt="Ghibli transformed preview" 
+                    alt="nano-banana transformed preview" 
                     className="w-full h-auto object-contain max-h-[500px]"
                     style={{ objectPosition: 'center' }}
                   />
@@ -1452,12 +1635,12 @@ export default function Evite() {
                 setImageApproved(false);
                 setShowTransformPreview(false);
                 toast({
-                  title: "Image denied",
-                  description: "Invites will be sent without images",
+                  title: "Using original image",
+                  description: "Your original uploaded image will be used in the invites",
                 });
               }}
             >
-              Deny - Send Without Image
+              Deny - Use Original Image
             </Button>
             <Button
               onClick={() => {
@@ -1465,7 +1648,7 @@ export default function Evite() {
                 setShowTransformPreview(false);
                 toast({
                   title: "Image approved",
-                  description: "This Ghibli art style image will be used in invites",
+                  description: "This nano-banana art style image will be used in invites",
                 });
               }}
             >

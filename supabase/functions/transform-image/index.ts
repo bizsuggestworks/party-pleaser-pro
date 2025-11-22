@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { imageUrl, eventTitle } = body;
+    const { imageUrl, eventTitle, transformOption, transformPrompt } = body;
 
     if (!imageUrl) {
       return new Response(JSON.stringify({ error: "Missing imageUrl" }), {
@@ -31,9 +31,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log("[transform-image] Transforming image to Ghibli style:", imageUrl);
+    console.log("[transform-image] Transforming image with nano-banana:", imageUrl);
+    console.log("[transform-image] Transformation option:", transformOption);
+    console.log("[transform-image] Custom prompt:", transformPrompt);
 
-    // Use Replicate API for Ghibli style transformation
+    // Use Replicate API for nano-banana style transformation
     // Note: Replicate accepts image URLs directly, so we don't need to fetch or convert the image
     const replicateApiKey = Deno.env.get("REPLICATE_API_TOKEN");
     
@@ -41,32 +43,34 @@ Deno.serve(async (req) => {
 
     if (replicateApiKey) {
       try {
-        console.log("[transform-image] Using Replicate API for Ghibli transformation");
+        console.log("[transform-image] Using Replicate API for nano-banana transformation");
         console.log("[transform-image] Original image URL:", imageUrl);
         
-        // Use the aaronaftab/mirage-ghibli model for Ghibli style transformation
-        // Try using the model name directly first, then fallback to version
+        // Use the google/nano-banana model for style transformation
+        // The model accepts multiple images in image_input array
+        // Use custom prompt if provided, otherwise use default
+        const defaultPrompt = "Make the sheets in the style of the logo. Make the scene natural. ";
+        const promptToUse = transformPrompt || defaultPrompt;
+        
         const modelInput = {
-          image: imageUrl, // Use the URL directly
-          prompt: "GHIBLI anime style photo",
-          go_fast: true,
-          guidance_scale: 10,
-          prompt_strength: 0.77,
-          num_inference_steps: 38,
+          prompt: promptToUse,
+          image_input: [imageUrl], // Use the URL directly in an array
         };
         
-        console.log("[transform-image] Calling Replicate API with model: aaronaftab/mirage-ghibli");
+        console.log("[transform-image] Using prompt:", promptToUse);
+        
+        console.log("[transform-image] Calling Replicate API with model: google/nano-banana");
         // Avoid JSON.stringify on large objects to prevent stack overflow
         console.log("[transform-image] Input image URL:", imageUrl);
         
-        const replicateResponse = await fetch("https://api.replicate.com/v1/predictions", {
+        // Use the model-specific endpoint to avoid needing a version hash
+        const replicateResponse = await fetch("https://api.replicate.com/v1/models/google/nano-banana/predictions", {
           method: "POST",
           headers: {
             "Authorization": `Token ${replicateApiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            version: "166efd159b4138da932522bc5af40d39194033f587d9bdbab1e594119eae3e7f", // aaronaftab/mirage-ghibli:166efd159b4138da932522bc5af40d39194033f587d9bdbab1e594119eae3e7f
             input: modelInput,
           }),
         });
@@ -156,7 +160,7 @@ Deno.serve(async (req) => {
               }
               
               if (transformedImageUrl && transformedImageUrl !== imageUrl && transformedImageUrl.startsWith('http')) {
-                console.log("[transform-image] ✓✓✓ Image transformed to Ghibli style successfully! ✓✓✓");
+                console.log("[transform-image] ✓✓✓ Image transformed with nano-banana successfully! ✓✓✓");
                 console.log("[transform-image] Original URL:", imageUrl);
                 console.log("[transform-image] Transformed URL from Replicate:", transformedImageUrl);
                 
@@ -179,7 +183,7 @@ Deno.serve(async (req) => {
                     console.warn("[transform-image] Supabase credentials not found, returning Replicate URL directly");
                   } else {
                     const timestamp = Date.now();
-                    const storagePath = `evite-uploads/transformed/ghibli_${timestamp}.webp`;
+                    const storagePath = `evite-uploads/transformed/nano-banana_${timestamp}.webp`;
                     
                     console.log("[transform-image] Uploading transformed image to Supabase Storage:", storagePath);
                     
@@ -270,7 +274,7 @@ Deno.serve(async (req) => {
       }
     } else {
       console.error("[transform-image] ❌ REPLICATE_API_TOKEN not set!");
-      console.error("[transform-image] To enable Ghibli transformation:");
+      console.error("[transform-image] To enable nano-banana transformation:");
       console.error("[transform-image] 1. Get your API token from https://replicate.com/account/api-tokens");
       console.error("[transform-image] 2. Add it in Supabase Dashboard → Edge Functions → Secrets → REPLICATE_API_TOKEN");
       console.warn("[transform-image] Using original image (no transformation will occur)");

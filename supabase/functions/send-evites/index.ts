@@ -198,11 +198,11 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
   const config = styleConfigs[style] || styleConfigs.classic;
 
   if (hasCustomImages) {
-    // AI-generated invite with Ghibli-style photo
+    // AI-generated invite with nano-banana style photo
     const mainImage = customImages[0];
     const welcomeText = event.title ? `Welcome to ${title}` : "Welcome to the party";
     
-    console.log("[buildEmailHtml] Building email with Ghibli-style image:", {
+    console.log("[buildEmailHtml] Building email with nano-banana style image:", {
       mainImage,
       welcomeText,
       mainImageUrl: mainImage,
@@ -221,7 +221,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
     }
     
     // Additional validation: Check if URL is accessible
-    console.log("[buildEmailHtml] ✓ Using Ghibli-transformed image URL:", mainImage);
+    console.log("[buildEmailHtml] ✓ Using nano-banana transformed image URL:", mainImage);
     console.log("[buildEmailHtml] Image URL type:", typeof mainImage);
     console.log("[buildEmailHtml] Image URL length:", mainImage.length);
     console.log("[buildEmailHtml] Image URL starts with http:", mainImage.startsWith('http'));
@@ -248,7 +248,7 @@ function buildEmailHtml(event: EviteEvent, inviteUrl: string, aiInviteText?: str
     </head>
     <body style="margin:0;padding:0;background-color:#f9fafb;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
       <div style="max-width:640px;margin:0 auto;background-color:#ffffff">
-        <!-- Hero Image Section with Ghibli Art and Welcome Text -->
+        <!-- Hero Image Section with nano-banana Art and Welcome Text -->
         <div class="hero-image-container" style="position:relative;width:100%;max-width:640px;overflow:visible;background:${config.gradient};margin:0 auto;text-align:center">
           <img class="hero-image" src="${mainImage}" alt="${htmlEscape(title)}" style="width:100%;max-width:640px;height:auto;min-height:400px;max-height:800px;object-fit:contain;object-position:center;display:block;margin:0 auto;padding:0;border:0;background-color:#f0f0f0" loading="eager" />
           <!-- Welcome to the party text overlay - positioned over image -->
@@ -742,7 +742,7 @@ Deno.serve(async (req) => {
               console.error(`[send-evites] Image tag context: ${html.substring(imgTagIndex, imgTagIndex + 200)}`);
             }
           } else {
-            console.log(`[send-evites] ✓ Email HTML correctly includes Ghibli image`);
+            console.log(`[send-evites] ✓ Email HTML correctly includes nano-banana image`);
           }
         }
         
